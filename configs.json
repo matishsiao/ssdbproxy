@@ -1,0 +1,21 @@
+{
+  "host":"127.0.0.1",
+  "port":4001,
+  "password":"",
+  "nodelist":[
+    {
+      "id":"current",
+      "host":"127.0.0.1",
+      "port":4002,
+      "password":"yourpassword",
+      "weight":100
+    },
+    {
+      "id":"asia",
+      "host":"127.0.0.1",
+      "port":4003,
+      "password":"yourpassword",
+      "weight":100
+    }
+    ]
+}

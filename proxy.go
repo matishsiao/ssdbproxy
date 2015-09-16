@@ -16,7 +16,7 @@ var serverIP string
 func Listen(ip string,port int) {
 	 
 	serverIP = ip
-	log.Printf("[Server] %v%v start listen.\n",serverIP,port)
+	log.Printf("[Server] %v:%v start listen.\n",serverIP,port)
 	l, err := net.Listen("tcp", fmt.Sprintf("%s:%d",serverIP,port))
 	if err != nil {
 		log.Printf("Listen Error:%v\n",err)

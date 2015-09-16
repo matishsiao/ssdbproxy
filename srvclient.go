@@ -7,7 +7,9 @@ import (
 	"strings"
 	"strconv"
 	"bytes"
+	"github.com/matishsiao/gossdb/ssdb"
 	"fmt"
+	"sort"
 )
 
 type SrvClient struct {
@@ -57,10 +59,10 @@ func (cl *SrvClient) Read() {
 }
 
 func (cl *SrvClient) Process(data []byte) {
-	log.Printf("Receive:%v\nbytes:%v\n",string(data),data)
+	/*log.Printf("Receive:%v\nbytes:%v\n",string(data),data)
 	for k,v := range data {
 		fmt.Printf("[%d]:%s %v\n",k,string(v),v)
-	}
+	}*/
 	req := cl.Parser(string(data))
 	if len(req) == 0 {
 		//ok, not_found, error, fail, client_error
@@ -68,13 +70,144 @@ func (cl *SrvClient) Process(data []byte) {
 	} else {
 		switch req[0] {
 			case "auth":
-				cl.Send([]string{"ok"})
+				if len(req) == 2 {
+					if CONFIGS.Password != "" && req[1] == CONFIGS.Password {
+						cl.Send([]string{"ok"})
+					} else {
+						cl.Send([]string{"fail","password incorrect."})
+					}
+				} else {
+					cl.Send([]string{"fail","request format incorrect"})
+				}
 			break
-			case "hget":
-				cl.Send([]string{"ok","server"})
-			break	
+			default:
+				res,err := cl.Query(req)
+				if err != nil {
+					cl.Send([]string{"error",err.Error()})
+				}
+				log.Println("Response:",res)
+				if res == nil {
+					cl.Send([]string{"not_found"})
+				} else {
+					cl.Send(res)
+				}
 		}
 	}
+}
+
+func (cl *SrvClient) Query(args []string) ([]string,error) {
+	find := false
+	log.Println("Query:",args)
+	var mapList map[string]string
+	var tmpList []string
+	var response []string
+	var counter int
+	process := false
+	switch args[0] {
+		case "hgetall","hscan","hrscan","multi_hget","scan","rscan","hsize","hkeys":
+			mapList = make(map[string]string)
+			process = true
+		break	
+	}	
+	
+	for _,v := range CONFIGS.Nodelist {
+		log.Println("Connect to ",v.Host, v.Port)
+	    db, err := ssdb.Connect(v.Host, v.Port,v.Password)
+	    if(err != nil){
+	    	log.Println("db connection error:",err)
+	    	continue
+	    }
+	    errFlag := false
+	   	var errMsg error
+	    if len(args) >= 2 {
+	    	val,err := db.Do(args)
+	    	if err != nil {
+	    		errFlag = true
+	    		errMsg = err
+	    	}
+	    			
+	    	if !errFlag && len(val) > 1 && val[0] != "not_found" {
+	    		find = true
+	    		log.Println(val)
+	    		db.Close()
+	    		if !process {
+	    			response = val
+	    			break
+	    		} else {
+	    			switch args[0] {
+	    				case "hsize":
+	    					size,err := strconv.Atoi(val[1])
+	    					if err != nil {
+	    						log.Println("hsize change fail:",err,val[1])
+	    					}
+	    					counter += size
+	    				break
+	    				case "hkeys":
+	    					val = val[1:]
+	    					for _,kv := range val {
+	    						kfind := false
+	    						for _,rv := range tmpList {
+	    							if kv == rv {
+	    								kfind = true
+	    								break
+	    							}
+	    						}
+	    						if !kfind {
+	    							tmpList = append(tmpList,kv)
+	    						}
+	    					}
+	    				break
+	    				default:
+		    				length := len(val[1:])
+							data := val[1:]
+							for i := 0; i < length; i += 2 {
+								if _,ok := mapList[data[i]]; !ok {
+									mapList[data[i]] = data[i+1]
+								}
+							}
+	    			}
+	    			
+	    		}
+	    	}
+	   	} else {
+	    	errFlag = true
+	    	errMsg = fmt.Errorf("bad request:request length incorrect.")
+	    }
+	    		
+	    if errFlag {
+	    	db.Close()
+	    	return nil,errMsg
+	    }
+    }
+	
+	if find {
+		switch args[0] {
+			case "hgetall","hscan","hrscan","multi_hget","scan","rscan":
+				if len(mapList) > 0 {
+					response = append(response,"ok")
+					keylist := sortedKeys(mapList)
+					log.Println("keylist:",keylist)
+					for _,v := range keylist {
+						response = append(response,v)
+						response = append(response,mapList[v])
+					}
+			    }
+			break	
+			case "hsize":
+				response = append(response,"ok")
+				response = append(response,fmt.Sprintf("%d",counter))
+			break
+			case "hkeys":
+				log.Println("tmpList:",tmpList)
+				response = append(response,"ok")
+				sort.Strings(tmpList)
+				response = append(response,tmpList...)
+			break
+		}
+	    return response,nil
+	}
+	return nil,nil
+	
 }
 
 func (cl *SrvClient) Send(args []string) {
@@ -113,7 +246,7 @@ func (cl *SrvClient) Parser(data string)[]string {
 			
 			splitarr = append(splitarr,param)
 			tmpdata = tmpdata[cut+1:]
-			fmt.Printf("Data Len:%d LenIdx:%d cut:%d Param:%s tmpdata:%s\n",pklen,lenIdx,cut,param,tmpdata)
+			//fmt.Printf("Data Len:%d LenIdx:%d cut:%d Param:%s tmpdata:%s\n",pklen,lenIdx,cut,param,tmpdata)
 		} else {
 			break
 		}
