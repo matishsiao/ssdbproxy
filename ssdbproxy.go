@@ -24,6 +24,7 @@ func main() {
 		os.Exit(1)
 	}
 	CONFIGS = config
+	SetUlimit(102000)
 	go Listen(CONFIGS.Host,CONFIGS.Port)
 	for {
 		configWatcher()

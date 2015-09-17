@@ -5,6 +5,7 @@ import (
 )
 
 type Configs struct {
+	Debug		bool `json:"debug"`
 	Host     string `json:"host"`
 	Nodelist []struct {
 		Host     string `json:"host"`

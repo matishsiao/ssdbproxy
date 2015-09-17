@@ -46,7 +46,9 @@ func (cl *SrvClient) Read() {
 	for cl.Connected {
 		bytesRead, err := cl.Conn.Read(buf)
 	    if err != nil {
-	     	log.Printf("[Read Error]:%v\n",err)	
+	    	if CONFIGS.Debug {
+	     		log.Printf("[Read Error]:%v\n",err)	
+	     	}
 	     	cl.Close()
 	     	break
 	    } else {
@@ -85,7 +87,9 @@ func (cl *SrvClient) Process(data []byte) {
 				if err != nil {
 					cl.Send([]string{"error",err.Error()})
 				}
-				log.Println("Response:",res)
+				if CONFIGS.Debug {
+					log.Println("Response:",res)
+				}
 				if res == nil {
 					cl.Send([]string{"not_found"})
 				} else {
@@ -97,21 +101,31 @@ func (cl *SrvClient) Process(data []byte) {
 
 func (cl *SrvClient) Query(args []string) ([]string,error) {
 	find := false
-	log.Println("Query:",args)
+	if CONFIGS.Debug {
+		log.Println("Query:",args)
+	}
 	var mapList map[string]string
 	var tmpList []string
 	var response []string
 	var counter int
 	process := false
 	switch args[0] {
-		case "hgetall","hscan","hrscan","multi_hget","scan","rscan","hsize","hkeys":
+		case "hgetall","hscan","hrscan","multi_hget","scan","rscan","multi_get":
 			mapList = make(map[string]string)
 			process = true
+		break
+		case "hsize","hkeys","keys","rkeys","hlist","hrlist":
+			process = true
 		break	
+		case "del","multi_del","multi_hdel","exists","hexists","hclear","hdel":
+			process = true
+		break
 	}	
-	
+	quit := false
 	for _,v := range CONFIGS.Nodelist {
-		log.Println("Connect to ",v.Host, v.Port)
+		if CONFIGS.Debug {
+			log.Println("Connect to ",v.Host, v.Port)
+		}
 	    db, err := ssdb.Connect(v.Host, v.Port,v.Password)
 	    if(err != nil){
 	    	log.Println("db connection error:",err)
@@ -128,7 +142,9 @@ func (cl *SrvClient) Query(args []string) ([]string,error) {
 	    			
 	    	if !errFlag && len(val) > 1 && val[0] != "not_found" {
 	    		find = true
-	    		log.Println(val)
+	    		if CONFIGS.Debug {
+	    			log.Println(val)
+	    		}
 	    		db.Close()
 	    		if !process {
 	    			response = val
@@ -142,8 +158,11 @@ func (cl *SrvClient) Query(args []string) ([]string,error) {
 	    					}
 	    					counter += size
 	    				break
-	    				case "hkeys":
+	    				case "hkeys","keys","rkeys","hlist","hrlist":
 	    					val = val[1:]
+	    					if CONFIGS.Debug {
+								log.Println("keys val:",val)
+							}
 	    					for _,kv := range val {
 	    						kfind := false
 	    						for _,rv := range tmpList {
@@ -156,6 +175,15 @@ func (cl *SrvClient) Query(args []string) ([]string,error) {
 	    							tmpList = append(tmpList,kv)
 	    						}
 	    					}
+	    				break
+	    				case "del","multi_del","hclear","hdel","multi_hdel":
+	    					response = val
+	    				break
+	    				case "exists","hexists":
+	    					response = val
+	    					if val[1] == "1" {
+	    						quit = true
+	    					} 
 	    				break
 	    				default:
 		    				length := len(val[1:])
@@ -173,6 +201,9 @@ func (cl *SrvClient) Query(args []string) ([]string,error) {
 	    	errFlag = true
 	    	errMsg = fmt.Errorf("bad request:request length incorrect.")
 	    }
+	   	if quit {
+	   		break
+	   	}
 	    		
 	    if errFlag {
 	    	db.Close()
@@ -181,12 +212,32 @@ func (cl *SrvClient) Query(args []string) ([]string,error) {
     }
 	
 	if find {
+		
+		limit := -1
 		switch args[0] {
-			case "hgetall","hscan","hrscan","multi_hget","scan","rscan":
+			case "hgetall","hscan","hrscan","multi_hget","scan","rscan","multi_get","hkeys","keys","rkeys","hlist","hrlist":
+				argsLimit,err := strconv.Atoi(args[len(args)-1])
+				if err != nil {
+					log.Println("limit parser error:",err)
+				} else {
+					limit = argsLimit
+				}
+			break
+		}
+		switch args[0] {
+			case "hgetall","hscan","hrscan","multi_hget","multi_get","scan","rscan":
 				if len(mapList) > 0 {
 					response = append(response,"ok")
 					keylist := sortedKeys(mapList)
-					log.Println("keylist:",keylist)
+					if args[0] == "rscan" || args[0] == "hrscan" {
+						sort.Sort(sort.Reverse(sort.StringSlice(keylist)))
+					}
+					if CONFIGS.Debug {
+						log.Println("keylist:",keylist)
+					}
+					if limit != -1 {
+						keylist = keylist[:limit]
+					}
 					for _,v := range keylist {
 						response = append(response,v)
 						response = append(response,mapList[v])
@@ -197,10 +248,21 @@ func (cl *SrvClient) Query(args []string) ([]string,error) {
 				response = append(response,"ok")
 				response = append(response,fmt.Sprintf("%d",counter))
 			break
-			case "hkeys":
-				log.Println("tmpList:",tmpList)
+			case "hkeys","keys","rkeys","hlist","hrlist":
+				if CONFIGS.Debug {
+					log.Println("tmpList:",tmpList)
+				}
 				response = append(response,"ok")
 				sort.Strings(tmpList)
+				if args[0] == "rkeys" || args[0] == "hrlist" {
+					sort.Sort(sort.Reverse(sort.StringSlice(tmpList)))
+				}
+				if limit != -1 {
+					if len(tmpList) < limit {
+						limit = len(tmpList)
+					}
+					tmpList = tmpList[:limit]
+				}
 				response = append(response,tmpList...)
 			break
 		}
@@ -219,10 +281,9 @@ func (cl *SrvClient) Send(args []string) {
 		buf.WriteByte('\n')
 	}
 	buf.WriteByte('\n')
-	//_, err := cl.Write(buf.Bytes())
 	_,err := cl.Conn.Write(buf.Bytes())
 	if err != nil {
-		fmt.Println("Client send error:",err)
+		log.Println("Client send error:",err)
 		cl.Close()
 	}
 }
@@ -251,8 +312,10 @@ func (cl *SrvClient) Parser(data string)[]string {
 			break
 		}
 	}
-	for k,v := range splitarr {
-		fmt.Printf("[%d]:%s\n",k,v)
+	if CONFIGS.Debug {
+		for k,v := range splitarr {
+			fmt.Printf("[%d]:%s\n",k,v)
+		}
 	}
 	return splitarr
 }
