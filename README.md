@@ -1,7 +1,8 @@
 # ssdbproxy
-	ssdb sharding proxy service by go lang.
 
-#futures
+ssdb sharding proxy service by go lang.
+
+### futures
 	support functions:
 		auth 
 		set
@@ -33,8 +34,9 @@
 		multi_hget
 		multi_hdel
 
-#configuration
-	use json format to configuration proxy setting.
+### configuration
+
+use json format to configuration proxy setting.
 	
 ```
 	{
