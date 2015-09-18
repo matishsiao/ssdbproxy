@@ -22,6 +22,9 @@ type SrvClient struct {
 func (cl *SrvClient) Init(conn *net.TCPConn) {
 	cl.Conn = conn
 	cl.Connected = true
+	if CONFIGS.Password == "" {
+		cl.Auth = true
+	}
 	//cl.Conn.SetReadDeadline(time.Now().Add(time.Duration(envConfig.Configs.Server.Timeout) * time.Second))
 	cl.Read()
 }
@@ -72,28 +75,38 @@ func (cl *SrvClient) Process(data []byte) {
 	} else {
 		switch req[0] {
 			case "auth":
-				if len(req) == 2 {
-					if CONFIGS.Password != "" && req[1] == CONFIGS.Password {
-						cl.Send([]string{"ok"})
+				if CONFIGS.Password != "" {
+					if len(req) == 2 {
+						if req[1] == CONFIGS.Password {
+							cl.Auth = true
+							cl.Send([]string{"ok"})
+						} else {
+							cl.Send([]string{"fail","password incorrect."})
+						}
 					} else {
-						cl.Send([]string{"fail","password incorrect."})
+						cl.Send([]string{"fail","request format incorrect"})
 					}
 				} else {
-					cl.Send([]string{"fail","request format incorrect"})
-				}
+					cl.Auth = true
+					cl.Send([]string{"ok"})
+				}	
 			break
 			default:
-				res,err := cl.Query(req)
-				if err != nil {
-					cl.Send([]string{"error",err.Error()})
-				}
-				if CONFIGS.Debug {
-					log.Println("Response:",res)
-				}
-				if res == nil {
-					cl.Send([]string{"not_found"})
+				if cl.Auth {
+					res,err := cl.Query(req)
+					if err != nil {
+						cl.Send([]string{"error",err.Error()})
+					}
+					if CONFIGS.Debug {
+						log.Println("Response:",res)
+					}
+					if res == nil {
+						cl.Send([]string{"not_found"})
+					} else {
+						cl.Send(res)
+					}
 				} else {
-					cl.Send(res)
+					cl.Send([]string{"error","you need login first"})
 				}
 		}
 	}
