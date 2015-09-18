@@ -78,3 +78,6 @@ use json format to configuration proxy setting.
  cd $GOPATH/github.com/matishsiao/ssdbproxy
  go build
 ```
+
+#see more information?
+ http://matishsiao.blogspot.tw/2015/09/ssdb-sharding-proxy.html
