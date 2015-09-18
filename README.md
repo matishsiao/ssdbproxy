@@ -70,3 +70,11 @@ use json format to configuration proxy setting.
 | port  | proxy listen port  |
 | password  | if you use auth params,you can use it to control connection |
 | nodelist  | Default node 1 is current db,so we will read/write in this node first.  |
+
+#How to build
+
+```
+ go get github.com/matishsiao/ssdbproxy/
+ cd $GOPATH/github.com/matishsiao/ssdbproxy
+ go build
+```
