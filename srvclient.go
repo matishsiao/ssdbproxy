@@ -79,7 +79,7 @@ func (cl *SrvClient) Process(data []byte) {
 					if len(req) == 2 {
 						if req[1] == CONFIGS.Password {
 							cl.Auth = true
-							cl.Send([]string{"ok"})
+							cl.Send([]string{"ok","1"})
 						} else {
 							cl.Send([]string{"fail","password incorrect."})
 						}
@@ -88,7 +88,7 @@ func (cl *SrvClient) Process(data []byte) {
 					}
 				} else {
 					cl.Auth = true
-					cl.Send([]string{"ok"})
+					cl.Send([]string{"ok","1"})
 				}	
 			break
 			default:
@@ -146,24 +146,29 @@ func (cl *SrvClient) Query(args []string) ([]string,error) {
 	    }
 	    errFlag := false
 	   	var errMsg error
-	    if len(args) >= 2 {
+	    if len(args) > 0 {
 	    	val,err := db.Do(args)
 	    	if err != nil {
 	    		errFlag = true
 	    		errMsg = err
 	    	}
-	    			
-	    	if !errFlag && len(val) > 1 && val[0] != "not_found" {
-	    		find = true
-	    		if CONFIGS.Debug {
-	    			log.Println(val)
-	    		}
-	    		db.Close()
-	    		if !process {
+	    	if CONFIGS.Debug {
+	    		log.Println("args:",args," Do Response:",val,"error:",err)
+	    	}	
+	    	
+	    	db.Close()
+	    	
+	    	if !errFlag && !process && len(val) >= 1 {
+	    		if val[0] == "ok" {
 	    			response = val
 	    			break
-	    		} else {
-	    			switch args[0] {
+	    		} else if len(response) == 0 {
+	    			response = val
+	    		}	
+	    	}		
+	    	if !errFlag && len(val) >= 1 && val[0] != "not_found" {
+	    		find = true
+	    		switch args[0] {
 	    				case "hsize":
 	    					size,err := strconv.Atoi(val[1])
 	    					if err != nil {
@@ -207,8 +212,6 @@ func (cl *SrvClient) Query(args []string) ([]string,error) {
 								}
 							}
 	    			}
-	    			
-	    		}
 	    	}
 	   	} else {
 	    	errFlag = true
@@ -228,27 +231,33 @@ func (cl *SrvClient) Query(args []string) ([]string,error) {
 		
 		limit := -1
 		switch args[0] {
-			case "hgetall","hscan","hrscan","multi_hget","scan","rscan","multi_get","hkeys","keys","rkeys","hlist","hrlist":
+			case "hscan","hrscan","scan","rscan","hkeys","keys","rkeys","hlist","hrlist":
+				
 				argsLimit,err := strconv.Atoi(args[len(args)-1])
 				if err != nil {
 					log.Println("limit parser error:",err)
 				} else {
 					limit = argsLimit
 				}
+				if CONFIGS.Debug {
+					log.Println("argsLimit:",argsLimit, " args len:",args[len(args)-1])
+				}
 			break
 		}
 		switch args[0] {
 			case "hgetall","hscan","hrscan","multi_hget","multi_get","scan","rscan":
+				response = append(response,"ok")
 				if len(mapList) > 0 {
-					response = append(response,"ok")
 					keylist := sortedKeys(mapList)
 					if args[0] == "rscan" || args[0] == "hrscan" {
 						sort.Sort(sort.Reverse(sort.StringSlice(keylist)))
 					}
 					if CONFIGS.Debug {
-						log.Println("keylist:",keylist)
+						log.Println("keylist:",keylist, " limit:",limit)
 					}
-					if limit != -1 {
+					
+					//if data length > limit ,cut it
+					if limit != -1 && len(keylist) >= limit {
 						keylist = keylist[:limit]
 					}
 					for _,v := range keylist {
@@ -281,7 +290,7 @@ func (cl *SrvClient) Query(args []string) ([]string,error) {
 		}
 	    return response,nil
 	}
-	return nil,nil
+	return response,nil
 	
 }
 
