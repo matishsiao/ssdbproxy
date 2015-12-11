@@ -7,17 +7,27 @@ import (
 	"time"
 	"io/ioutil"
 	"encoding/json"
+	"runtime/debug"
+	"runtime"
+	"runtime/pprof"
 )
 var (
-	version string = "0.0.1"
+	version string = "0.0.4"
 	configPath string = "configs.json"
 	CONFIGS Configs
 	modTime time.Time
+	memprofile string = "mempprof.log"
+	memFile *os.File
+	
 )
 
 func main() {
 	log.Println("Version:",version)
 	flag.StringVar(&configPath,"c","configs.json","config file path")
+	//flag.StringVar(&memprofile,"mm", "", "write memory profile to this file")
+	flag.Parse()
+	
+	
 	config,err := loadConfigs(configPath)
 	if err != nil {
 		log.Println("Load config file error:",err)
@@ -25,11 +35,39 @@ func main() {
 	}
 	CONFIGS = config
 	SetUlimit(102000)
+	debug.SetGCPercent(50)
+	useCPU := runtime.NumCPU() - 1
+	if useCPU <= 0 {
+		useCPU = 1
+	}
+	runtime.GOMAXPROCS(useCPU)
+	//go memPorfile()
+	
 	go Listen(CONFIGS.Host,CONFIGS.Port)
 	for {
 		configWatcher()
 		time.Sleep(250 * time.Millisecond)
 	}
+}
+
+func memPorfile() {
+	if memprofile != "" {
+        var err error
+        memFile, err = os.Create(memprofile)
+        if err != nil {
+            log.Println(err)
+        } else {
+            log.Println("start write heap profile")
+            pprof.WriteHeapProfile(memFile)
+            defer memFile.Close()
+        }
+    }
+	writeMemProfile()
+    time.Sleep(300 * time.Second)
+    log.Println("write heap profile finished.")
+}
+func writeMemProfile() {
+    pprof.WriteHeapProfile(memFile)
 }
 
 func configWatcher() {

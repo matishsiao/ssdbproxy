@@ -2,20 +2,20 @@
   "debug":true,
   "host":"127.0.0.1",
   "port":4001,
-  "password":"",
+  "password":"sa23891odi1@8hfn!0932aqiomc9AQjiHH",
   "nodelist":[
     {
       "id":"current",
-      "host":"127.0.0.1",
-      "port":4002,
-      "password":"yourpassword",
+      "host":"130.211.246.35",
+      "port":4001,
+      "password":"sa23891odi1@8hfn!0932aqiomc9AQjiHH",
       "weight":100
     },
     {
       "id":"asia",
-      "host":"127.0.0.1",
-      "port":4003,
-      "password":"yourpassword",
+      "host":"104.155.216.67",
+      "port":4001,
+      "password":"sa23891odi1@8hfn!0932aqiomc9AQjiHH",
       "weight":100
     }
     ]

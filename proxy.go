@@ -28,7 +28,7 @@ func Listen(ip string,port int) {
 	for {
     	conn, err := ln.AcceptTCP()
     	if err != nil {
-    		log.Println(err)
+    		log.Println("Accept Error:",err)
     	} else {
     		go ProcessConn(conn)
     	}
@@ -38,7 +38,7 @@ func Listen(ip string,port int) {
 func ProcessConn(c *net.TCPConn) {
 	client := new(SrvClient)
 	client.mu = &sync.Mutex{}
-	srvClientList = append(srvClientList,client)
+	//srvClientList = append(srvClientList,client)
 	client.Init(c)
 	
 }

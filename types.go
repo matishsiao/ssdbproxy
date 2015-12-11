@@ -2,20 +2,32 @@ package main
 
 import (
 	"sort"
+	"github.com/matishsiao/gossdb/ssdb"
 )
 
 type Configs struct {
 	Debug		bool `json:"debug"`
 	Host     string `json:"host"`
-	Nodelist []struct {
-		Host     string `json:"host"`
-		ID       string `json:"id"`
-		Password string `json:"password"`
-		Port     int    `json:"port"`
-		Weight   int    `json:"weight"`
-	} `json:"nodelist"`
+	Timeout	int64	`json:"timeout"`
+	Sync	bool	`json:"sync"`
+	Nodelist []DBNodeInfo `json:"nodelist"`
 	Password string `json:"password"`
 	Port     int    `json:"port"`
+}
+
+type DBNodeInfo struct {
+	Host	string `json:"host"`
+	Id		string `json:"id"`
+	Password string `json:"password"`
+	Port     int    `json:"port"`
+	Weight   int    `json:"weight"`
+	Mode	string	`json:"mode"`
+}
+
+type DBNode struct {
+	Client *ssdb.Client
+	Info DBNodeInfo
+	Id string
 }
 
 type sortedMap struct {
