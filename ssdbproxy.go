@@ -10,12 +10,14 @@ import (
 	"runtime/debug"
 	"runtime"
 	"runtime/pprof"
+	"sync"
 )
 var (
 	version string = "0.0.4"
 	configPath string = "configs.json"
 	CONFIGS Configs
 	modTime time.Time
+	dbClient ServerClient
 	memprofile string = "mempprof.log"
 	memFile *os.File
 	
@@ -42,7 +44,9 @@ func main() {
 	}
 	runtime.GOMAXPROCS(useCPU)
 	//go memPorfile()
-	
+	dbClient = ServerClient{Mutex:&sync.Mutex{},Running:true}
+	dbClient.ArgsChannel = make(chan []string)
+	go dbClient.Serve()
 	go Listen(CONFIGS.Host,CONFIGS.Port)
 	for {
 		configWatcher()

@@ -11,28 +11,19 @@ type ServerClient struct {
 	Mutex *sync.Mutex
 	ArgsList []ServerArgs
 	DBNodes []*DBNode
+	ArgsChannel chan []string
 	Running bool
 }
 
 type ServerArgs struct {
 	Args []string
-	Server string
-	Client string
 }
 
-func (cl *ServerClient) Append(args []string,runningServer string,requestClient string) {
-	server := false
-	for _,cv := range CONFIGS.Nodelist {
-		if requestClient == cv.Host && cv.Mode == "mirror" {
-			server = true
-			break
-		}
-	}
-	if !server {
-		cl.Mutex.Lock()
-		cl.ArgsList = append(cl.ArgsList,ServerArgs{Args:args,Server:runningServer,Client:requestClient})
-		cl.Mutex.Unlock()
-	}
+func (cl *ServerClient) Append(args []string) {
+	cl.ArgsChannel <- args
+	/*cl.Mutex.Lock()
+	cl.ArgsList = append(cl.ArgsList,ServerArgs{Args:args})
+	cl.Mutex.Unlock()*/
 }
 
 func (cl *ServerClient) Get() *ServerArgs {
@@ -49,16 +40,20 @@ func (cl *ServerClient) Get() *ServerArgs {
 	}
 	return obj
 }
-
+func (cl *ServerClient) Serve() {
+	for args := range cl.ArgsChannel {
+		cl.MirrorQuery(args)
+	}
+}
 func (cl *ServerClient) Run() {
 	for {
 		obj := cl.Get()
 		if obj != nil {
-			cl.MirrorQuery(obj.Args,obj.Server,obj.Client)
+			cl.MirrorQuery(obj.Args)
 		} else if !cl.Running {
 			break
 		}
-		time.Sleep(10 * time.Microsecond)
+		time.Sleep(10 * time.Nanosecond)
 	}
 	for _,v := range cl.DBNodes {
 		v.Client.Close()
@@ -73,14 +68,16 @@ func (cl *ServerClient) Close() {
 func (cl *ServerClient) CheckDBNodes() {
 	if len(cl.DBNodes) == 0 {
 		for _,v := range CONFIGS.Nodelist {
-			db, err := ssdb.Connect(v.Host, v.Port,v.Password)
-			if CONFIGS.Debug {
-				log.Println("Connect to ",v.Host, v.Port)
+			if v.Mode == "mirror" {
+				db, err := ssdb.Connect(v.Host, v.Port,v.Password)
+				if CONFIGS.Debug {
+					log.Println("Connect to ",v.Host, v.Port)
+				}
+				if err != nil {
+				 	continue
+				}
+				cl.DBNodes = append(cl.DBNodes,&DBNode{Client:db,Id:v.Id,Info:v})
 			}
-			if err != nil {
-			 	continue
-			}
-			cl.DBNodes = append(cl.DBNodes,&DBNode{Client:db,Id:v.Id,Info:v})
 		}
 	} else {
 		for _,cv := range CONFIGS.Nodelist {
@@ -92,20 +89,22 @@ func (cl *ServerClient) CheckDBNodes() {
 				}
 			}
 			if add {
-				db, err := ssdb.Connect(cv.Host, cv.Port,cv.Password)
-				if CONFIGS.Debug {
-					log.Println("Connect to ",cv.Host, cv.Port)
+				if cv.Mode == "mirror" {
+					db, err := ssdb.Connect(cv.Host, cv.Port,cv.Password)
+					if CONFIGS.Debug {
+						log.Println("Connect to ",cv.Host, cv.Port)
+					}
+					if err != nil {
+					 	continue
+					}
+					cl.DBNodes = append(cl.DBNodes,&DBNode{Client:db,Id:cv.Id,Info:cv})
 				}
-				if err != nil {
-				 	continue
-				}
-				cl.DBNodes = append(cl.DBNodes,&DBNode{Client:db,Id:cv.Id,Info:cv})
 			}
 		}
 	}
 }
 
-func (cl *ServerClient) MirrorQuery(args []string,runningServer string,Client string) {	
+func (cl *ServerClient) MirrorQuery(args []string) {	
 	if len(args) > 0 {
 		process := 0
 		cl.CheckDBNodes()
@@ -113,14 +112,10 @@ func (cl *ServerClient) MirrorQuery(args []string,runningServer string,Client st
 		var errMsg error
 		for _,v := range cl.DBNodes {
 			db := v.Client
-		    if v.Info.Mode != "queries" && v.Info.Id != runningServer {
-		    
+		    if v.Info.Mode == "mirror" {
 		   		val,err := db.Do(args)
 			   	if err != nil {
 			   		errMsg = err
-			   		if CONFIGS.Sync { 
-				   		log.Println("mirror query error args:",args," Do Response:",val,"error:",err)
-				   	}
 			   		errflag = true
 			   		continue	
 			   	}
@@ -133,11 +128,11 @@ func (cl *ServerClient) MirrorQuery(args []string,runningServer string,Client st
 		
 		//if some date save failed,we will retry again.
 		if errflag {
-			cl.Append(args,runningServer,Client)
+			cl.Append(args)
 			log.Println("mirror query failed args:",args,"error:",errMsg)
 		}
 		if CONFIGS.Sync { 
-			log.Printf("MirrorQuery Args:%v Info:%v Process:%d\n",args,runningServer,process)
+			log.Printf("MirrorQuery Args:%v Info:%v Process:%d\n",args,process)
 		}	
 	}	
 }

@@ -10,6 +10,7 @@ type Configs struct {
 	Host     string `json:"host"`
 	Timeout	int64	`json:"timeout"`
 	Sync	bool	`json:"sync"`
+	Zip int	`json:"zip"`
 	Nodelist []DBNodeInfo `json:"nodelist"`
 	Password string `json:"password"`
 	Port     int    `json:"port"`
@@ -28,6 +29,12 @@ type DBNode struct {
 	Client *ssdb.Client
 	Info DBNodeInfo
 	Id string
+}
+
+
+type SrvData struct {
+	Key string
+	Value string
 }
 
 type sortedMap struct {
@@ -58,4 +65,44 @@ func sortedKeys(m map[string]string) []string {
 	}
 	sort.Strings(sm.s)
 	return sm.s
+}
+
+type sortedSrvArray []SrvData
+
+func (sm sortedSrvArray) Len() int {
+	return len(sm)
+}
+
+func (sm sortedSrvArray) Less(i, j int) bool {
+	return sm[i].Key > sm[j].Key 
+}
+
+func (sm sortedSrvArray) Swap(i, j int) {
+	sm[i], sm[j] = sm[j], sm[i]
+}
+
+func sortedSrvKeys(m []SrvData) []SrvData {
+	var sm sortedSrvArray = m
+	sort.Sort(sm)
+	return sm
+}
+
+type sortedRSrvArray []SrvData
+
+func (sm sortedRSrvArray) Len() int {
+	return len(sm)
+}
+
+func (sm sortedRSrvArray) Less(i, j int) bool {
+	return sm[i].Key < sm[j].Key 
+}
+
+func (sm sortedRSrvArray) Swap(i, j int) {
+	sm[i], sm[j] = sm[j], sm[i]
+}
+
+func sortedSrvRKeys(m []SrvData) []SrvData {
+	var sm sortedRSrvArray = m
+	sort.Sort(sm)
+	return sm
 }
