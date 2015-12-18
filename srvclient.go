@@ -21,6 +21,7 @@ import (
 type SrvClient struct {
 	Conn        *net.TCPConn
 	mu          *sync.Mutex
+	MirrorClient ServerClient
 	RemoteAddr  string
 	RequestTime int64
 	recvBuf     bytes.Buffer
@@ -39,6 +40,8 @@ func (cl *SrvClient) Init(conn *net.TCPConn) {
 		cl.Auth = true
 	}
 	cl.RemoteAddr = strings.Split(cl.Conn.RemoteAddr().String(), ":")[0]
+	cl.MirrorClient = ServerClient{Mutex:&sync.Mutex{}}
+	cl.MirrorClient.ArgsChannel = make(chan []string)
 	go cl.HealthCheck()
 	cl.Read()
 
@@ -56,6 +59,7 @@ func (cl *SrvClient) Close() {
 	if CONFIGS.Debug {
 		log.Println("Close Service Connection by Timeout:", cl.Conn.RemoteAddr(), "Close DB Connections:", len(cl.DBNodes))
 	}
+	cl.MirrorClient.Close()
 	cl.DBNodes = nil
 	cl.mu.Unlock()
 }
@@ -303,7 +307,7 @@ func (cl *SrvClient) Query(args []string) ([]string, error) {
 						var mirror_args []string
 						mirror_args = append(mirror_args, "mirror")
 						mirror_args = append(mirror_args, args...)
-						dbClient.Append(mirror_args)
+						cl.MirrorClient.Append(mirror_args)
 					}
 				}
 			} else if mirror && process {
@@ -324,7 +328,7 @@ func (cl *SrvClient) Query(args []string) ([]string, error) {
 					var mirror_args []string
 					mirror_args = append(mirror_args, "mirror_del")
 					mirror_args = append(mirror_args, args...)
-					dbClient.Append(mirror_args)
+					cl.MirrorClient.Append(mirror_args)
 				}
 			} else if v.Info.Mode != "mirror" {
 				//start_time := time.Now().UnixNano()
@@ -392,6 +396,10 @@ func (cl *SrvClient) Query(args []string) ([]string, error) {
 							}
 						} else {
 							log.Println("query failed:", args, "Return:", val)
+							response = val
+							errMsg = fmt.Errorf("bad request:request length incorrect.")
+							quit = true
+							errFlag = true
 						}
 					}
 				}

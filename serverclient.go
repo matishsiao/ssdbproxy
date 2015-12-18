@@ -4,7 +4,7 @@ import (
 	"sync"
 	"log"
 	"github.com/matishsiao/gossdb/ssdb"
-	_"time"
+	"time"
 )
 
 type ServerClient struct {
@@ -13,6 +13,7 @@ type ServerClient struct {
 	DBNodes []*DBNode
 	ArgsChannel chan []string
 	Running bool
+	Process bool
 }
  
 type ServerArgs struct {
@@ -20,6 +21,10 @@ type ServerArgs struct {
 }
 
 func (cl *ServerClient) Append(args []string) {
+	if !cl.Running {
+		cl.Running = true
+		go cl.Serve()
+	}
 	if CONFIGS.Debug {
 		log.Println("Server Client Append:",args)
 	}
@@ -28,12 +33,29 @@ func (cl *ServerClient) Append(args []string) {
 
 func (cl *ServerClient) Serve() {
 	for args := range cl.ArgsChannel {
+		cl.Process = true
 		cl.MirrorQuery(args)
+		if !cl.Running {
+			break
+		}
 	}
+	cl.Process = false
 }
 
 func (cl *ServerClient) Close() {
 	cl.Running = false
+	//wait all mirror command done then close connections.
+	for {
+		if !cl.Process {
+			for _, v := range cl.DBNodes {
+				v.Client.Close()
+			}
+			break
+		} 
+		time.Sleep(100 * time.Millisecond)
+	}
+	cl.DBNodes = nil
+	cl = nil
 }
 
 func (cl *ServerClient) CheckDBNodes() {
@@ -62,9 +84,8 @@ func (cl *ServerClient) CheckDBNodes() {
 			if add {
 				if cv.Mode == "mirror" {
 					db, err := ssdb.Connect(cv.Host, cv.Port,cv.Password)
-					if CONFIGS.Debug {
-						log.Println("Connect to ",cv.Host, cv.Port)
-					}
+					log.Println("Server Client Connect to ",cv.Host, cv.Port)
+					
 					if err != nil {
 					 	continue
 					}
@@ -84,23 +105,37 @@ func (cl *ServerClient) MirrorQuery(args []string) {
 		for _,v := range cl.DBNodes {
 			db := v.Client
 		    if v.Info.Mode == "mirror" {
-		   		val,err := db.Do(args)
-			   	if err != nil {
-			   		errMsg = err
+		    	if db.Connected && !db.Retry {
+			   		val,err := db.Do(args)
+				   	if err != nil {
+				   		errMsg = err
+				   		if CONFIGS.Sync { 
+				   			log.Println("Mirror query failed on args:",args,"error:",db.Id)
+				   		}	
+				   		errflag = true
+				   		continue	
+				   	}
+				   	
+				   	if val[0] == "ok" {
+			    		process++
+			    	}
+			   	} else {
 			   		errflag = true
-			   		continue	
+			   		if CONFIGS.Sync { 
+			   			log.Println("Mirror query failed args:",args,"error:",db.Id)
+			   		}	
+				   	continue	
 			   	}
-			   	
-			   	if val[0] == "ok" {
-		    		process++
-		    	} 
 	    	}
 	    }
 		
 		//if some date save failed,we will retry again.
 		if errflag {
+			time.Sleep(1 * time.Second)
 			cl.Append(args)
-			log.Println("mirror query failed args:",args,"error:",errMsg)
+			if CONFIGS.Sync { 
+				log.Println("Mirror query failed wait args:",args,"error:",errMsg)	
+			}	
 		}
 		if CONFIGS.Sync { 
 			log.Printf("MirrorQuery Args:%v Info:%v Process:%d\n",args,process)
