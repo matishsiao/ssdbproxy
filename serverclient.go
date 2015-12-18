@@ -4,7 +4,7 @@ import (
 	"sync"
 	"log"
 	"github.com/matishsiao/gossdb/ssdb"
-	"time"
+	_"time"
 )
 
 type ServerClient struct {
@@ -14,51 +14,22 @@ type ServerClient struct {
 	ArgsChannel chan []string
 	Running bool
 }
-
+ 
 type ServerArgs struct {
 	Args []string
 }
 
 func (cl *ServerClient) Append(args []string) {
+	if CONFIGS.Debug {
+		log.Println("Server Client Append:",args)
+	}
 	cl.ArgsChannel <- args
-	/*cl.Mutex.Lock()
-	cl.ArgsList = append(cl.ArgsList,ServerArgs{Args:args})
-	cl.Mutex.Unlock()*/
 }
 
-func (cl *ServerClient) Get() *ServerArgs {
-	var obj *ServerArgs
-	if len(cl.ArgsList) > 0 {
-		cl.Mutex.Lock()	
-		obj = &cl.ArgsList[0]
-		if len(cl.ArgsList) > 1 {
-			cl.ArgsList = cl.ArgsList[1:]
-		} else {
-			cl.ArgsList = nil
-		}
-		cl.Mutex.Unlock()
-	}
-	return obj
-}
 func (cl *ServerClient) Serve() {
 	for args := range cl.ArgsChannel {
 		cl.MirrorQuery(args)
 	}
-}
-func (cl *ServerClient) Run() {
-	for {
-		obj := cl.Get()
-		if obj != nil {
-			cl.MirrorQuery(obj.Args)
-		} else if !cl.Running {
-			break
-		}
-		time.Sleep(10 * time.Nanosecond)
-	}
-	for _,v := range cl.DBNodes {
-		v.Client.Close()
-	}
-	cl.DBNodes = nil
 }
 
 func (cl *ServerClient) Close() {

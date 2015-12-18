@@ -10,7 +10,6 @@ type Configs struct {
 	Host     string `json:"host"`
 	Timeout	int64	`json:"timeout"`
 	Sync	bool	`json:"sync"`
-	Zip int	`json:"zip"`
 	Nodelist []DBNodeInfo `json:"nodelist"`
 	Password string `json:"password"`
 	Port     int    `json:"port"`
