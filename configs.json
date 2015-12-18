@@ -1,21 +1,40 @@
 {
-  "debug":true,
+  "debug":false,
   "host":"127.0.0.1",
   "port":4001,
-  "password":"sa23891odi1@8hfn!0932aqiomc9AQjiHH",
+  "sync":false,
+  "password":"ssdbproxydefaultpassword",
   "nodelist":[
     {
       "id":"current",
-      "host":"130.211.246.35",
-      "port":4001,
-      "password":"sa23891odi1@8hfn!0932aqiomc9AQjiHH",
+      "host":"127.0.0.1",
+      "port":4002,
+      "password":"",
+      "mode":"main",
       "weight":100
     },
     {
-      "id":"asia",
-      "host":"104.155.216.67",
+      "id":"db2",
+      "host":"192.168.0.1",
       "port":4001,
-      "password":"sa23891odi1@8hfn!0932aqiomc9AQjiHH",
+      "password":"ssdbproxydefaultpassword",
+      "mode":"mirror",
+      "weight":100
+    },
+    {
+      "id":"db3",
+      "host":"192.168.0.2",
+      "port":4001,
+      "password":"ssdbproxydefaultpassword",
+      "mode":"mirror",
+      "weight":100
+    },
+    {
+      "id":"localdb_slave",
+      "host":"127.0.0.1",
+      "port":4003,
+      "password":"",
+      "mode":"queries",
       "weight":100
     }
     ]
