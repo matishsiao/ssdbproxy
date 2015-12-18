@@ -44,7 +44,7 @@ if you send command "zip" with args "1" to proxy server, proxy server will retru
 
 golang example code:
 
-https://github.com/matishsiao/gossdb/ssdb/
+https://github.com/matishsiao/gossdb
 
 	
 # configuration
