@@ -94,7 +94,14 @@ use json format to configuration proxy setting.
 | port  | proxy listen port  |
 | sync  | proxy sync debug mode: true / false |
 | password  | if you use auth params,you can use it to control connection |
-| nodelist  | Default mode equal "main" is current db,so we will read/write in this node first.  |
+| nodelist  | Default mode equal "main" is current db,so we will read/write in this node first. |
+| node | db node information |
+| id   | node id for human watch |
+| host | ssdb host |
+| port | ssdb or proxy port |
+| password | ssdb password or proxy server password |
+| mode | db mode: main / mirror / queries |
+| weight | queries weight (no use) |
 
 #How to build
 
