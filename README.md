@@ -2,6 +2,10 @@
 
 ssdb sharding proxy service by go lang.
 
+# version
+
+version: 0.0.5
+
 # futures
 	support functions:
 		auth 
@@ -33,7 +37,16 @@ ssdb sharding proxy service by go lang.
 		multi_hset
 		multi_hget
 		multi_hdel
+	
+#support gzip:
+	
+if you send command "zip" with args "1" to proxy server, proxy server will retrun base64 encode gzip string
 
+golang example code:
+
+https://github.com/matishsiao/gossdb
+
+	
 # configuration
 
 use json format to configuration proxy setting.
@@ -43,6 +56,7 @@ use json format to configuration proxy setting.
 	  "debug":true,
 	  "host":"127.0.0.1", //Proxy listen host
 	  "port":4001,// Proxy listen port
+	  "sync":false,//show db mirror status
 	  "password":"", //Proxy password
 	  "nodelist":[ //Sharding nodes
 	    {
@@ -50,6 +64,15 @@ use json format to configuration proxy setting.
 	      "host":"127.0.0.1",
 	      "port":4002,
 	      "password":"ssdbpassword",
+	      "mode":"main",//current db
+	      "weight":100
+	    },
+	    {
+	      "id":"db2",
+	      "host":"127.0.0.1",
+	      "port":4001,
+	      "password":"ssdbpassword",
+	      "mode":"mirror",//all proxy set or delete command will auto sync up to this proxy server
 	      "weight":100
 	    },
 	    {
@@ -57,6 +80,7 @@ use json format to configuration proxy setting.
 	      "host":"127.0.0.1",
 	      "port":4003,
 	      "password":"ssdbpassword",
+	      "mode":"queries",//queries slave db
 	      "weight":100
 	    }
 	    ]
@@ -68,8 +92,16 @@ use json format to configuration proxy setting.
 | debug  | debug mode:true / false  |
 | host  | proxy listen host  |
 | port  | proxy listen port  |
+| sync  | proxy sync debug mode: true / false |
 | password  | if you use auth params,you can use it to control connection |
-| nodelist  | Default node 1 is current db,so we will read/write in this node first.  |
+| nodelist  | Default mode equal "main" is current db,so we will read/write in this node first. |
+| node | db node information |
+| id   | node id for human watch |
+| host | ssdb host |
+| port | ssdb or proxy port |
+| password | ssdb password or proxy server password |
+| mode | db mode: main / mirror / queries |
+| weight | queries weight (no use) |
 
 #How to build
 
