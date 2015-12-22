@@ -7,17 +7,17 @@ import (
 	"time"
 	"io/ioutil"
 	"encoding/json"
-	"runtime/debug"
+	_"runtime/debug"
 	"runtime"
 	"runtime/pprof"
 	"sync"
 )
 var (
-	version string = "0.0.5"
+	version string = "0.0.6"
 	configPath string = "configs.json"
 	CONFIGS Configs
 	modTime time.Time
-	dbClient ServerClient
+	GlobalClient ServerClient
 	memprofile string = "mempprof.log"
 	memFile *os.File
 	
@@ -37,38 +37,40 @@ func main() {
 	}
 	CONFIGS = config
 	SetUlimit(102000)
-	debug.SetGCPercent(50)
+	//debug.SetGCPercent(50)
 	useCPU := runtime.NumCPU() - 1
 	if useCPU <= 0 {
 		useCPU = 1
 	}
 	runtime.GOMAXPROCS(useCPU)
-	//go memPorfile()
-	dbClient = ServerClient{Mutex:&sync.Mutex{},Running:true}
-	dbClient.ArgsChannel = make(chan []string)
-	go dbClient.Serve()
+	
+	go memPorfile()
+	GlobalClient = ServerClient{Mutex:&sync.Mutex{},DBPool:&ServerConnectionPool{ConnectionLimit:CONFIGS.ConnectionLimit}}
+	GlobalClient.ArgsChannel = make(chan []string)
+	GlobalClient.DBPool.Init()
 	go Listen(CONFIGS.Host,CONFIGS.Port)
+	timeCounter := 0
 	for {
 		configWatcher()
+		//one min ping mirror DBs
+		timeCounter++
+		if timeCounter % 120 == 0 {
+			//GlobalClient.DBPool.CheckStatus()
+			//GlobalClient.DBPool.Status()
+			PrintGCSummary()
+			timeCounter = 0
+		}
 		time.Sleep(250 * time.Millisecond)
 	}
 }
 
 func memPorfile() {
-	if memprofile != "" {
-        var err error
-        memFile, err = os.Create(memprofile)
-        if err != nil {
-            log.Println(err)
-        } else {
-            log.Println("start write heap profile")
-            pprof.WriteHeapProfile(memFile)
-            defer memFile.Close()
-        }
-    }
-	writeMemProfile()
-    time.Sleep(300 * time.Second)
-    log.Println("write heap profile finished.")
+	log.Println("pprof profile started.")
+	StartCPUProfile()
+    time.Sleep(100 * time.Second)
+    DumpHeap()
+    StopCPUProfile()
+    log.Println("write pprof profile finished.")
 }
 func writeMemProfile() {
     pprof.WriteHeapProfile(memFile)

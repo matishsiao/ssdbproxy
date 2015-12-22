@@ -21,7 +21,6 @@ import (
 type SrvClient struct {
 	Conn        *net.TCPConn
 	mu          *sync.Mutex
-	MirrorClient ServerClient
 	RemoteAddr  string
 	RequestTime int64
 	recvBuf     bytes.Buffer
@@ -40,8 +39,9 @@ func (cl *SrvClient) Init(conn *net.TCPConn) {
 		cl.Auth = true
 	}
 	cl.RemoteAddr = strings.Split(cl.Conn.RemoteAddr().String(), ":")[0]
-	cl.MirrorClient = ServerClient{Mutex:&sync.Mutex{}}
-	cl.MirrorClient.ArgsChannel = make(chan []string)
+	/*cl.MirrorClient = ServerClient{Mutex:&sync.Mutex{}}
+	cl.MirrorClient.ArgsChannel = make(chan []string)*/
+	cl.CheckDBNodes()
 	go cl.HealthCheck()
 	cl.Read()
 
@@ -59,7 +59,7 @@ func (cl *SrvClient) Close() {
 	if CONFIGS.Debug {
 		log.Println("Close Service Connection by Timeout:", cl.Conn.RemoteAddr(), "Close DB Connections:", len(cl.DBNodes))
 	}
-	cl.MirrorClient.Close()
+	//cl.MirrorClient.Close()
 	cl.DBNodes = nil
 	cl.mu.Unlock()
 }
@@ -77,6 +77,7 @@ func (cl *SrvClient) HealthCheck() {
 		}
 		time.Sleep(time.Duration(timeout) * time.Second)
 	}
+	
 	//receyle client
 	cl = nil
 }
@@ -103,6 +104,7 @@ func (cl *SrvClient) Read() {
 }
 
 func (cl *SrvClient) Process(req []string) {
+	
 	if len(req) == 0 {
 		//ok, not_found, error, fail, client_error
 		cl.Send([]string{"error", "request format incorrect."}, false)
@@ -124,6 +126,8 @@ func (cl *SrvClient) Process(req []string) {
 				cl.Auth = true
 				cl.Send([]string{"ok", "1"}, false)
 			}
+		case "ping":
+			cl.Send([]string{"ok", "1"}, false)
 		case "zip":
 			if cl.Auth {
 				if len(req) == 2 {
@@ -216,7 +220,6 @@ func (cl *SrvClient) Query(args []string) ([]string, error) {
 	errFlag := false
 	sync := false
 	syncDel := false
-	//var start_time int64
 	var errMsg error
 	if len(args) > 0 {
 		switch args[0] {
@@ -243,7 +246,7 @@ func (cl *SrvClient) Query(args []string) ([]string, error) {
 				log.Println("Main Mirror Sync Del args:", args, cl.RemoteAddr)
 			}
 		}
-		cl.CheckDBNodes()
+		
 		for _, v := range cl.DBNodes {
 
 			db := v.Client
@@ -289,26 +292,26 @@ func (cl *SrvClient) Query(args []string) ([]string, error) {
 					}
 				}
 			} else if mirror && !process {
-				if v.Info.Mode != "queries" {
-					if v.Info.Mode == "main" {
-						val, err := db.Do(args)
-						if err != nil {
-							errFlag = true
-							errMsg = err
-						}
-						if !errFlag && val[0] == "ok" {
-							response = val
-						} else if len(response) == 0 {
-							response = val
-						}
-						if CONFIGS.Sync {
-							log.Printf("Query Main Need Mirror args:%v Response:%v Error:%v Server:%s Port:%d RemoteAddr:%s\n", args, val, err, v.Info.Host, v.Info.Port, cl.RemoteAddr)
-						}
+				if v.Info.Mode == "main" {
+					val, err := db.Do(args)
+					if err != nil {
+						errFlag = true
+						errMsg = err
+					}
+					if !errFlag && val[0] == "ok" {
+						response = val
 						var mirror_args []string
 						mirror_args = append(mirror_args, "mirror")
 						mirror_args = append(mirror_args, args...)
-						cl.MirrorClient.Append(mirror_args)
+						GlobalClient.Append(mirror_args)
+						break
+					} else {
+						response = val
+						break
 					}
+					if CONFIGS.Sync {
+						log.Printf("Query Main Need Mirror args:%v Response:%v Error:%v Server:%s Port:%d RemoteAddr:%s\n", args, val, err, v.Info.Host, v.Info.Port, cl.RemoteAddr)
+					}						
 				}
 			} else if mirror && process {
 
@@ -317,7 +320,7 @@ func (cl *SrvClient) Query(args []string) ([]string, error) {
 					errFlag = true
 					errMsg = err
 				}
-				log.Printf("Main Mirror Process args:%v Response:%v Error:%v Server:%s Port:%d RemoteAddr:%s\n", args, val, err, v.Info.Host, v.Info.Port, cl.RemoteAddr)
+				//log.Printf("Main Mirror Process args:%v Response:%v Error:%v Server:%s Port:%d RemoteAddr:%s\n", args, val, err, v.Info.Host, v.Info.Port, cl.RemoteAddr)
 
 				if !errFlag && val[0] == "ok" {
 					response = val
@@ -328,19 +331,14 @@ func (cl *SrvClient) Query(args []string) ([]string, error) {
 					var mirror_args []string
 					mirror_args = append(mirror_args, "mirror_del")
 					mirror_args = append(mirror_args, args...)
-					cl.MirrorClient.Append(mirror_args)
+					go GlobalClient.Append(mirror_args)
 				}
 			} else if v.Info.Mode != "mirror" {
-				//start_time := time.Now().UnixNano()
 				val, err := db.Do(args)
 				if err != nil {
 					errFlag = true
 					errMsg = err
 				}
-				/*if start_time != 0 {
-					use_time := (time.Now().UnixNano() - start_time)/1000000
-					log.Println("Query use time:",use_time)
-				}*/
 				if CONFIGS.Debug {
 					log.Println("args:", args, " Do Response:", val, "error:", err)
 				}

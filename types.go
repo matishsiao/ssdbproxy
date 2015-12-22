@@ -13,6 +13,7 @@ type Configs struct {
 	Nodelist []DBNodeInfo `json:"nodelist"`
 	Password string `json:"password"`
 	Port     int    `json:"port"`
+	ConnectionLimit int `json:"limit"`
 }
 
 type DBNodeInfo struct {
