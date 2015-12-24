@@ -75,15 +75,15 @@ use json format to configuration proxy setting.
 	    {
 	      "id":"db2",
 	      "host":"127.0.0.1",
-	      "port":4001,
+	      "port":4003,
 	      "password":"ssdbpassword",
 	      "mode":"mirror",//all proxy set or delete command will auto sync up to this proxy server
 	      "weight":100
 	    },
 	    {
-	      "id":"asia",
+	      "id":"db3",
 	      "host":"127.0.0.1",
-	      "port":4003,
+	      "port":4004,
 	      "password":"ssdbpassword",
 	      "mode":"queries",//queries slave db
 	      "weight":100
