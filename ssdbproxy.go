@@ -13,7 +13,7 @@ import (
 	"sync"
 )
 var (
-	version string = "0.0.6"
+	version string = "0.0.7"
 	configPath string = "configs.json"
 	CONFIGS Configs
 	modTime time.Time
@@ -36,15 +36,14 @@ func main() {
 		os.Exit(1)
 	}
 	CONFIGS = config
-	SetUlimit(102000)
-	//debug.SetGCPercent(50)
+	SetUlimit(1002000)
 	useCPU := runtime.NumCPU() - 1
 	if useCPU <= 0 {
 		useCPU = 1
 	}
 	runtime.GOMAXPROCS(useCPU)
-	
-	go memPorfile()
+	//Pprof testing
+	//go memPorfile()
 	GlobalClient = ServerClient{Mutex:&sync.Mutex{},DBPool:&ServerConnectionPool{ConnectionLimit:CONFIGS.ConnectionLimit}}
 	GlobalClient.ArgsChannel = make(chan []string)
 	GlobalClient.DBPool.Init()

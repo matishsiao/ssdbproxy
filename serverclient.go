@@ -72,7 +72,7 @@ func (scp *ServerConnectionPool) CheckMirrorDB() {
 		scp.Pool = make(map[string][]ServerConnection)
 		scp.Counter = make(map[string]int)
 		for _,v := range CONFIGS.Nodelist {
-			if v.Mode == "mirror" {
+			if v.Mode == "mirror" || v.Mode == "sync" {
 				name := fmt.Sprintf("%s:%d",v.Host,v.Port)
 				for i := 0;i < scp.ConnectionLimit;i++ {
 					db, err := ssdb.Connect(v.Host, v.Port,v.Password)
@@ -84,7 +84,7 @@ func (scp *ServerConnectionPool) CheckMirrorDB() {
 					}
 					scp.Pool[name] = append(scp.Pool[name],ServerConnection{Client:db,Info:v,Mu:&sync.Mutex{}})
 				}
-				log.Printf("Add Mirror Connection[%s]:%d Connections.",name,len(scp.Pool[name]))
+				log.Printf("Add Mirror Connection[%s][%s]:%d Connections.",name,v.Mode ,len(scp.Pool[name]))
 			}
 		}
 		for k,v := range scp.Pool {
@@ -159,23 +159,26 @@ type ServerConnection struct {
 
 func (sc *ServerConnection) Run(args []string) error {
 	var err error
-	if sc.Info.Mode == "mirror" {
-		db := sc.Client
-		sc.Mu.Lock()
-		sc.InUse = true
-		sc.Mu.Unlock()    
-		if db.Connected && !db.Retry {
-			_,err = db.Do(args)
-			if err != nil {
-				log.Printf("Mirror Run pool failed on Client[%s] args:%v Error:%v",db.Id,args,err)
-			}
-		} else {
-			err = fmt.Errorf("wait db connection retry.")
-		}
-		sc.Mu.Lock()
-		sc.InUse = false
-		sc.Mu.Unlock()   
+	var run_args []string = args
+	
+	if sc.Info.Mode == "sync" {
+		run_args = run_args[1:]
 	}
+	db := sc.Client
+	sc.Mu.Lock()
+	sc.InUse = true
+	sc.Mu.Unlock()    
+	if db.Connected && !db.Retry {
+		_,err = db.Do(run_args)
+		if err != nil {
+			log.Printf("Mirror Run pool failed on Client[%s] args:%v Error:%v",db.Id,args,err)
+		}
+	} else {
+		err = fmt.Errorf("wait db connection retry.")
+	}
+	sc.Mu.Lock()
+	sc.InUse = false
+	sc.Mu.Unlock() 
 	return err			
 }
 

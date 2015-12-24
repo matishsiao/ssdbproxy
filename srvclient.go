@@ -168,7 +168,7 @@ func (cl *SrvClient) Process(req []string) {
 func (cl *SrvClient) CheckDBNodes() {
 	if len(cl.DBNodes) == 0 {
 		for _, v := range CONFIGS.Nodelist {
-			if v.Mode != "mirror" {
+			if v.Mode == "main" || v.Mode == "queries" {
 				db, err := ssdb.Connect(v.Host, v.Port, v.Password)
 				if CONFIGS.Debug {
 					log.Println("Connect to ", v.Host, v.Port)
@@ -188,15 +188,17 @@ func (cl *SrvClient) CheckDBNodes() {
 					break
 				}
 			}
-			if add && cv.Mode != "mirror" {
-				db, err := ssdb.Connect(cv.Host, cv.Port, cv.Password)
-				if CONFIGS.Debug {
-					log.Println("Srv Client Connect to ", cv.Host, cv.Port)
+			if add {
+				if  cv.Mode == "main" || cv.Mode == "queries" {
+					db, err := ssdb.Connect(cv.Host, cv.Port, cv.Password)
+					if CONFIGS.Debug {
+						log.Println("Srv Client Connect to ", cv.Host, cv.Port)
+					}
+					if err != nil {
+						continue
+					}
+					cl.DBNodes = append(cl.DBNodes, &DBNode{Client: db, Id: cv.Id, Info: cv})
 				}
-				if err != nil {
-					continue
-				}
-				cl.DBNodes = append(cl.DBNodes, &DBNode{Client: db, Id: cv.Id, Info: cv})
 			}
 		}
 	}
