@@ -115,7 +115,7 @@ use json format to configuration proxy setting.
 | mode | db mode: main / mirror / queries / sync |
 | weight | queries weight (no use) |
 
-### Node Mode Configuration
+#### Node Mode Configuration
 | Mode | Description |
 | ------------- | ------------- |
 | main | default main SSDB Server ,this server only one |
