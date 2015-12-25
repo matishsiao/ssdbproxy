@@ -10,7 +10,8 @@ import (
 	_"runtime/debug"
 	"runtime"
 	"runtime/pprof"
-	"sync"
+	_"github.com/matishsiao/gossdb/ssdb"
+	_"sync"
 )
 var (
 	version string = "0.0.7"
@@ -44,16 +45,14 @@ func main() {
 	runtime.GOMAXPROCS(useCPU)
 	//Pprof testing
 	//go memPorfile()
-	GlobalClient = ServerClient{Mutex:&sync.Mutex{},DBPool:&ServerConnectionPool{ConnectionLimit:CONFIGS.ConnectionLimit}}
-	GlobalClient.ArgsChannel = make(chan []string)
-	GlobalClient.DBPool.Init()
+	GlobalClient.Init()
 	go Listen(CONFIGS.Host,CONFIGS.Port)
 	timeCounter := 0
 	for {
 		configWatcher()
 		//one min ping mirror DBs
 		timeCounter++
-		if timeCounter % 120 == 0 {
+		if timeCounter % 240 == 0 {
 			//GlobalClient.DBPool.CheckStatus()
 			//GlobalClient.DBPool.Status()
 			PrintGCSummary()
@@ -66,7 +65,7 @@ func main() {
 func memPorfile() {
 	log.Println("pprof profile started.")
 	StartCPUProfile()
-    time.Sleep(100 * time.Second)
+    time.Sleep(300 * time.Second)
     DumpHeap()
     StopCPUProfile()
     log.Println("write pprof profile finished.")

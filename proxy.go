@@ -6,18 +6,13 @@ import(
 	"log"
 	"os"
 	"sync"
-	_ "io"
-	_ "compress/gzip"
 )
 
-var srvClientList []*SrvClient
-var serverIP string
+var ProxyConn int64
 
 func Listen(ip string,port int) {
-	 
-	serverIP = ip
-	log.Printf("[Server] %v:%v start listen.\n",serverIP,port)
-	l, err := net.Listen("tcp", fmt.Sprintf("%s:%d",serverIP,port))
+	log.Printf("[Server] %v:%v start listen.\n",ip,port)
+	l, err := net.Listen("tcp", fmt.Sprintf("%s:%d",ip,port))
 	if err != nil {
 		log.Printf("Listen Error:%v\n",err)
 		os.Exit(1)
@@ -30,15 +25,13 @@ func Listen(ip string,port int) {
     	if err != nil {
     		log.Println("Accept Error:",err)
     	} else {
+    		ProxyConn++
     		go ProcessConn(conn)
     	}
 	}
 }
 
 func ProcessConn(c *net.TCPConn) {
-	client := new(SrvClient)
-	client.mu = &sync.Mutex{}
-	//srvClientList = append(srvClientList,client)
+	var client SrvClient = SrvClient{mu:&sync.Mutex{}}
 	client.Init(c)
-	
 }

@@ -155,7 +155,8 @@ func printGC(memStats *runtime.MemStats, gcstats *debug.GCStats) {
 		elapsed := time.Now().Sub(startTime)
 		overhead := float64(gcstats.PauseTotal) / float64(elapsed) * 100
 		allocatedRate := float64(memStats.TotalAlloc) / elapsed.Seconds()
-		log.Printf("Goroutine:%d NumGC:%d Pause:%s Pause(Avg):%s Overhead:%3.2f%% Alloc:%s Sys:%s Alloc(Rate):%s/s Histogram:%s %s %s \n",
+		log.Printf("[GC-Enabled]Connection:%d Goroutine:%d NumGC:%d Pause:%s Pause(Avg):%s Overhead:%3.2f%% Alloc:%s Sys:%s Alloc(Rate):%s/s Histogram:%s %s %s \n",
+			ProxyConn,
 			runtime.NumGoroutine(),
 			gcstats.NumGC,
 			toS(lastPause),
@@ -172,7 +173,9 @@ func printGC(memStats *runtime.MemStats, gcstats *debug.GCStats) {
 		elapsed := time.Now().Sub(startTime)
 		allocatedRate := float64(memStats.TotalAlloc) / elapsed.Seconds()
 
-		fmt.Printf("Alloc:%s Sys:%s Alloc(Rate):%s/s\n",
+		log.Printf("[GC-Disabled]Connection:%d Goroutine:%d Alloc:%s Sys:%s Alloc(Rate):%s/s\n",
+			ProxyConn,
+			runtime.NumGoroutine(),
 			toH(memStats.Alloc),
 			toH(memStats.Sys),
 			toH(uint64(allocatedRate)))

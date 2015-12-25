@@ -44,7 +44,7 @@ func (cl *SrvClient) Init(conn *net.TCPConn) {
 	cl.CheckDBNodes()
 	go cl.HealthCheck()
 	cl.Read()
-
+	//PrintGCSummary()
 }
 
 //Close Client connection
@@ -62,6 +62,7 @@ func (cl *SrvClient) Close() {
 	//cl.MirrorClient.Close()
 	cl.DBNodes = nil
 	cl.mu.Unlock()
+	ProxyConn--
 }
 
 func (cl *SrvClient) HealthCheck() {
@@ -69,9 +70,7 @@ func (cl *SrvClient) HealthCheck() {
 	timeout := 1
 	for cl.Connected {
 		if time.Now().Unix()-cl.RequestTime >= CONFIGS.Timeout {
-			if CONFIGS.Debug {
-				log.Println("HealthCheck Service Connection by Timeout:", cl.Conn.RemoteAddr())
-			}
+			log.Println("HealthCheck Service Connection by Timeout:", cl.Conn.RemoteAddr())
 			cl.Close()
 			break
 		}
@@ -92,10 +91,11 @@ func (cl *SrvClient) Read() {
 				log.Printf("Srv Client Receive Error:%v RemoteAddr:%s\n", err, cl.RemoteAddr)
 			}
 			cl.Close()
+			break
 		} else {
 			cl.RequestTime = time.Now().Unix()
 			if len(data) > 0 {
-				go cl.Process(data)
+				cl.Process(data)
 			}
 			timeout = 10
 		}
@@ -143,21 +143,25 @@ func (cl *SrvClient) Process(req []string) {
 			}
 		default:
 			if cl.Auth {
-				res, err := cl.Query(req)
-				if err != nil {
-					cl.Send([]string{"error", err.Error()}, false)
-				}
-				if CONFIGS.Debug {
-					log.Println("Response:", res)
-				}
-				if res == nil {
-					cl.Send([]string{"not_found"}, false)
-				} else {
-					if cl.Zip {
-						cl.Send(res, true)
-					} else {
-						cl.Send(res, false)
+				if GlobalClient.DBPool.InitFlag {
+					res, err := cl.Query(req)
+					if err != nil {
+						cl.Send([]string{"error", err.Error()}, false)
 					}
+					if CONFIGS.Debug {
+						log.Println("Response:", res)
+					}
+					if res == nil {
+						cl.Send([]string{"not_found"}, false)
+					} else {
+						if cl.Zip {
+							cl.Send(res, true)
+						} else {
+							cl.Send(res, false)
+						}
+					}
+				} else {
+					cl.Send([]string{"error", "Proxy service initing."}, false)
 				}
 			} else {
 				cl.Send([]string{"error", "you need login first"}, false)
@@ -333,7 +337,7 @@ func (cl *SrvClient) Query(args []string) ([]string, error) {
 					var mirror_args []string
 					mirror_args = append(mirror_args, "mirror_del")
 					mirror_args = append(mirror_args, args...)
-					go GlobalClient.Append(mirror_args)
+					GlobalClient.Append(mirror_args)
 				}
 			} else if v.Info.Mode != "mirror" {
 				val, err := db.Do(args)

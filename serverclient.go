@@ -12,15 +12,106 @@ type ServerClient struct {
 	Mutex *sync.Mutex
 	DBNodes []*DBNode
 	DBPool *ServerConnectionPool
-	ArgsChannel chan []string
 	Running bool
 	Process bool
+	ArgsQueue []*Queue
+	QueueIdx int
+}
+
+func (cl *ServerClient) Init() {
+	cl.Mutex = &sync.Mutex{}
+	cl.Running = true
+	cl.DBPool = &ServerConnectionPool{ConnectionLimit:CONFIGS.ConnectionLimit}
+	for i := 0; i < cl.DBPool.ConnectionLimit * 5;i++ {
+		var queue Queue
+		queue.Args = make(chan []string)
+		cl.ArgsQueue = append(cl.ArgsQueue,&queue)
+		go cl.Watcher(queue.Args)
+	}
+	go cl.DBPool.Init()
+}
+func (cl *ServerClient) Watcher(queue chan []string) {
+	for args := range queue {
+		cl.MirrorQuery(args)	
+		if !cl.Running {
+			return
+		}	
+	}
+}
+
+func (cl *ServerClient) Append(args []string) {
+	if !cl.Running {
+		cl.Running = true
+	}
+	if CONFIGS.Debug {
+		log.Println("Server Client Append:",args)
+	}
+	//cl.MirrorQuery(args)
+	cl.Mutex.Lock()
+	cl.QueueIdx++
+	if cl.QueueIdx >= len(cl.ArgsQueue) {
+		cl.QueueIdx = 0
+	}
+	idx := cl.QueueIdx
+	cl.Mutex.Unlock()
+	cl.ArgsQueue[idx].Add(args)
+}
+
+func (cl *ServerClient) Close() {
+	cl.Running = false
+	//wait all mirror command done then close connections.
+	for {
+		if !cl.Process {
+			for _, v := range cl.DBNodes {
+				v.Client.Close()
+			}
+			break
+		} 
+		time.Sleep(100 * time.Millisecond)
+	}
+	cl.DBNodes = nil
+	cl.DBPool.Close()
+	cl = nil
+}
+
+func (cl *ServerClient) MirrorQuery(args []string) {
+	if len(args) > 0 {
+		cl.Mutex.Lock()
+		cl.Process = true
+		cl.Mutex.Unlock()
+		err := cl.DBPool.Run(args)
+		//if some date save failed,we will retry again.
+		if err != nil {
+			time.Sleep(1 * time.Second)
+			//log.Println("Mirror query failed wait args:",args,"error:",err)	
+			go cl.Append(args)
+		} 
+		cl.Mutex.Lock()
+		cl.Process = false
+		cl.Mutex.Unlock()
+		//log.Printf("MirrorQuery Check Args:%v Error:%v\n",args,err)	
+	}	
+}
+
+type Queue struct {
+	Args chan []string
+}
+
+func (queue *Queue) Add(args []string) {
+	go queue.add(args)
+	
+}
+
+func (queue *Queue) add(args []string) {
+	queue.Args <- args
 }
 
 type ServerConnectionPool struct {
 	Pool map[string][]ServerConnection
 	Counter map[string]int
+	Mutex map[string]*sync.Mutex
 	ConnectionLimit int
+	InitFlag bool
 }
 
 func (scp *ServerConnectionPool) Init() {
@@ -71,26 +162,41 @@ func (scp *ServerConnectionPool) CheckMirrorDB() {
 	if scp.Pool == nil || len(scp.Pool) == 0 {
 		scp.Pool = make(map[string][]ServerConnection)
 		scp.Counter = make(map[string]int)
+		scp.Mutex = make(map[string]*sync.Mutex)
 		for _,v := range CONFIGS.Nodelist {
 			if v.Mode == "mirror" || v.Mode == "sync" {
 				name := fmt.Sprintf("%s:%d",v.Host,v.Port)
-				for i := 0;i < scp.ConnectionLimit;i++ {
-					db, err := ssdb.Connect(v.Host, v.Port,v.Password)
-					if CONFIGS.Debug {
-						log.Println("Connect to ",v.Host, v.Port)
-					}
-					if err != nil {
-					 	log.Printf("Connect to %s:%d Error:%v\n",v.Host, v.Port,err)
-					}
-					scp.Pool[name] = append(scp.Pool[name],ServerConnection{Client:db,Info:v,Mu:&sync.Mutex{}})
-				}
-				log.Printf("Add Mirror Connection[%s][%s]:%d Connections.",name,v.Mode ,len(scp.Pool[name]))
+				scp.Mutex[name] = &sync.Mutex{}
+				go scp.ConnectToDB(name,v)
 			}
 		}
+		
+		
 		for k,v := range scp.Pool {
 			log.Printf("CheckMirrorDB[%s]: connection size:%d\n",k,len(v))
 		}
+		time.Sleep(time.Second)
 	}
+	scp.InitFlag = true
+}
+
+func (scp *ServerConnectionPool) ConnectToDB(name string,v DBNodeInfo) {
+	for i := 0;i < scp.ConnectionLimit;i++ {
+		db, err := ssdb.Connect(v.Host, v.Port,v.Password)
+		if CONFIGS.Debug {
+			log.Println("Connect to ",v.Host, v.Port)
+		}
+		if err != nil {
+			log.Printf("Connect to %s:%d Error:%v\n",v.Host, v.Port,err)
+		}
+					
+		//default use zip transfered data
+		if v.Mode == "mirror" {
+			db.Do("zip",1)
+		}
+		scp.Pool[name] = append(scp.Pool[name],ServerConnection{Client:db,Info:v,Mu:&sync.Mutex{}})
+	}
+	log.Printf("Add Mirror Connection[%s][%s]:%d Connections.",name,v.Mode ,len(scp.Pool[name]))
 }
 
 func (scp *ServerConnectionPool) Status() {
@@ -128,11 +234,13 @@ func (scp *ServerConnectionPool) Run(args []string) error {
 		run := false
 		if !run {
 			for {
+				scp.Mutex[idx].Lock()
 				sc := sp[scp.Counter[idx]]
 				scp.Counter[idx]++
 				if scp.Counter[idx] >= len(sp) {
 						scp.Counter[idx] = 0
 				}
+				scp.Mutex[idx].Unlock()
 				if !sc.InUse {
 					err := sc.Run(args)
 					if err != nil {
@@ -180,50 +288,4 @@ func (sc *ServerConnection) Run(args []string) error {
 	sc.InUse = false
 	sc.Mu.Unlock() 
 	return err			
-}
-
-func (cl *ServerClient) Append(args []string) {
-	if !cl.Running {
-		cl.Running = true
-	}
-	if CONFIGS.Debug {
-		log.Println("Server Client Append:",args)
-	}
-	cl.MirrorQuery(args)
-}
-
-func (cl *ServerClient) Close() {
-	cl.Running = false
-	//wait all mirror command done then close connections.
-	for {
-		if !cl.Process {
-			for _, v := range cl.DBNodes {
-				v.Client.Close()
-			}
-			break
-		} 
-		time.Sleep(100 * time.Millisecond)
-	}
-	cl.DBNodes = nil
-	cl = nil
-}
-
-func (cl *ServerClient) MirrorQuery(args []string) {	
-	
-	if len(args) > 0 {
-		cl.Mutex.Lock()
-		cl.Process = true
-		cl.Mutex.Unlock()
-		err := cl.DBPool.Run(args)
-		//if some date save failed,we will retry again.
-		if err != nil {
-			time.Sleep(1 * time.Second)
-			//log.Println("Mirror query failed wait args:",args,"error:",err)	
-			go cl.Append(args)
-		} 
-		cl.Mutex.Lock()
-		cl.Process = false
-		cl.Mutex.Unlock()
-		//log.Printf("MirrorQuery Check Args:%v Error:%v\n",args,err)	
-	}	
 }
