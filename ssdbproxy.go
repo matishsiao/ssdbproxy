@@ -14,7 +14,7 @@ import (
 	_"sync"
 )
 var (
-	version string = "0.0.7"
+	version string = "0.0.8"
 	configPath string = "configs.json"
 	CONFIGS Configs
 	modTime time.Time
@@ -48,11 +48,15 @@ func main() {
 	GlobalClient.Init()
 	go Listen(CONFIGS.Host,CONFIGS.Port)
 	timeCounter := 0
+	timePrint := 240
+	if CONFIGS.Debug {
+		timePrint = 20
+	}
 	for {
 		configWatcher()
 		//one min ping mirror DBs
 		timeCounter++
-		if timeCounter % 240 == 0 {
+		if timeCounter % timePrint == 0 {
 			//GlobalClient.DBPool.CheckStatus()
 			//GlobalClient.DBPool.Status()
 			PrintGCSummary()

@@ -63,6 +63,9 @@ func (cl *SrvClient) Close() {
 	cl.DBNodes = nil
 	cl.mu.Unlock()
 	ProxyConn--
+	if ProxyConn <= 0 {
+		ProxyConn = 0
+	}	
 }
 
 func (cl *SrvClient) HealthCheck() {
