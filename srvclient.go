@@ -310,6 +310,9 @@ func (cl *SrvClient) Query(args []string) ([]string, error) {
 					if !errFlag && val[0] == "ok" {
 						response = val
 						var mirror_args []string
+						if len(args) > 2 {
+							SendSubInterface(args[1],args)
+						}
 						mirror_args = append(mirror_args, "mirror")
 						mirror_args = append(mirror_args, args...)
 						GlobalClient.Append(mirror_args)

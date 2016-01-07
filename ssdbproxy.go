@@ -14,7 +14,7 @@ import (
 	_"sync"
 )
 var (
-	version string = "0.0.8"
+	version string = "0.0.9"
 	configPath string = "configs.json"
 	CONFIGS Configs
 	modTime time.Time
@@ -47,6 +47,7 @@ func main() {
 	//go memPorfile()
 	GlobalClient.Init()
 	go Listen(CONFIGS.Host,CONFIGS.Port)
+	go WebServer()
 	timeCounter := 0
 	timePrint := 240
 	if CONFIGS.Debug {

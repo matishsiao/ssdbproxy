@@ -8,6 +8,7 @@ import (
 type Configs struct {
 	Debug		bool `json:"debug"`
 	Host     string `json:"host"`
+	Http	string	`json:"http"`
 	Timeout	int64	`json:"timeout"`
 	Sync	bool	`json:"sync"`
 	Nodelist []DBNodeInfo `json:"nodelist"`
