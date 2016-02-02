@@ -82,9 +82,8 @@ func (cl *ServerClient) MirrorQuery(args []string) {
 		err := cl.DBPool.Run(args)
 		//if some date save failed,we will retry again.
 		if err != nil {
-			time.Sleep(1 * time.Second)
-			//log.Println("Mirror query failed wait args:",args,"error:",err)	
-			go cl.Append(args)
+			log.Println("Mirror query failed args:",args,"error:",err)	
+			//go cl.Append(args)
 		} 
 		cl.Mutex.Lock()
 		cl.Process = false
@@ -247,10 +246,8 @@ func (scp *ServerConnectionPool) Run(args []string) error {
 						globalErr = err
 					}
 					run = true
-					//log.Printf("Run[%s][%s][%d]:Run Success\n",idx,sc.Client.Id,scp.Counter[idx])
 					break
 				}
-				//time.Sleep(10 * time.Microsecond)
 			}
 		}
 		//log.Printf("DB[%s]: Run success. Error:%v\n",k,globalErr)
