@@ -150,24 +150,29 @@ func (cl *SrvClient) Process(req []string) {
 					res, err := cl.Query(req)
 					if err != nil {
 						cl.Send([]string{"error", err.Error()}, false)
+						return
 					}
 					if CONFIGS.Debug {
 						log.Println("Response:", res)
 					}
 					if res == nil {
 						cl.Send([]string{"not_found"}, false)
+						return
 					} else {
 						if cl.Zip {
 							cl.Send(res, true)
 						} else {
 							cl.Send(res, false)
 						}
+						return
 					}
 				} else {
 					cl.Send([]string{"error", "Proxy service initing."}, false)
+					return
 				}
 			} else {
 				cl.Send([]string{"error", "you need login first"}, false)
+				return
 			}
 		}
 	}

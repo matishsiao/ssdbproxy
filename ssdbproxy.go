@@ -14,7 +14,7 @@ import (
 	_"sync"
 )
 var (
-	version string = "0.0.9"
+	version string = "0.0.10"
 	configPath string = "configs.json"
 	CONFIGS Configs
 	modTime time.Time
