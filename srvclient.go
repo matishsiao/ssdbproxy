@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
-	"github.com/matishsiao/gossdb/ssdb"
 	_ "io"
 	"log"
 	"net"
@@ -15,6 +15,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/matishsiao/gossdb/ssdb"
 )
 
 //Service Client for Proxy
@@ -65,7 +67,7 @@ func (cl *SrvClient) Close() {
 	ProxyConn--
 	if ProxyConn <= 0 {
 		ProxyConn = 0
-	}	
+	}
 }
 
 func (cl *SrvClient) HealthCheck() {
@@ -79,7 +81,7 @@ func (cl *SrvClient) HealthCheck() {
 		}
 		time.Sleep(time.Duration(timeout) * time.Second)
 	}
-	
+
 	//receyle client
 	cl = nil
 }
@@ -107,7 +109,7 @@ func (cl *SrvClient) Read() {
 }
 
 func (cl *SrvClient) Process(req []string) {
-	
+
 	if len(req) == 0 {
 		//ok, not_found, error, fail, client_error
 		cl.Send([]string{"error", "request format incorrect."}, false)
@@ -131,6 +133,49 @@ func (cl *SrvClient) Process(req []string) {
 			}
 		case "ping":
 			cl.Send([]string{"ok", "1"}, false)
+		case "batchexec":
+			if cl.Auth {
+				if GlobalClient.DBPool.InitFlag {
+					if len(req) == 2 {
+						var cmdlist [][]string
+						err := json.Unmarshal([]byte(req[1]), &cmdlist)
+						if err != nil {
+							cl.Send([]string{"fail", "batchexec need use json format."}, false)
+							return
+						}
+						var resultlist [][]string
+						for _, v := range cmdlist {
+							res, err := cl.Query(v)
+							if err != nil {
+								resultlist = append(resultlist, []string{"error", err.Error()})
+								continue
+							}
+							if res == nil {
+								resultlist = append(resultlist, []string{"not_found"})
+								continue
+							}
+							resultlist = append(resultlist, res)
+						}
+						resultjson, err := json.Marshal(resultlist)
+						if err != nil {
+							cl.Send([]string{"fail", "batchexec send json result failed." + err.Error()}, false)
+							return
+						}
+						res := []string{"ok", string(resultjson)}
+						if cl.Zip {
+							cl.Send(res, true)
+						} else {
+							cl.Send(res, false)
+						}
+					}
+				} else {
+					cl.Send([]string{"error", "Proxy service initing."}, false)
+					return
+				}
+
+			} else {
+				cl.Send([]string{"fail", "not auth"}, false)
+			}
 		case "zip":
 			if cl.Auth {
 				if len(req) == 2 {
@@ -201,7 +246,7 @@ func (cl *SrvClient) CheckDBNodes() {
 				}
 			}
 			if add {
-				if  cv.Mode == "main" || cv.Mode == "queries" {
+				if cv.Mode == "main" || cv.Mode == "queries" {
 					db, err := ssdb.Connect(cv.Host, cv.Port, cv.Password)
 					if CONFIGS.Debug {
 						log.Println("Srv Client Connect to ", cv.Host, cv.Port)
@@ -247,7 +292,7 @@ func (cl *SrvClient) Query(args []string) ([]string, error) {
 			mirror = true
 		case "exists", "hexists", "zexists":
 			process = true
-		case "set", "setx", "setnx", "expire", "ttl", "getset", "incr", "getbit", "setbit", "multi_set", "hset", "hincr", "multi_hset", "zset", "zincr", "multi_zset", "qset", "qpush", "qpush_front", "qpush_back", "qpop":
+		case "set", "setx", "setnx", "expire", "ttl", "getset", "incr", "getbit", "setbit", "multi_set", "hset", "hincr", "multi_hset", "zset", "zincr", "multi_zset", "qset", "qget", "qpush", "qpush_front", "qpush_back", "qpop":
 			mirror = true
 		case "mirror":
 			sync = true
@@ -260,7 +305,7 @@ func (cl *SrvClient) Query(args []string) ([]string, error) {
 				log.Println("Main Mirror Sync Del args:", args, cl.RemoteAddr)
 			}
 		}
-		
+
 		for _, v := range cl.DBNodes {
 
 			db := v.Client
@@ -316,7 +361,7 @@ func (cl *SrvClient) Query(args []string) ([]string, error) {
 						response = val
 						var mirror_args []string
 						if len(args) > 2 {
-							SendSubInterface(args[1],args)
+							SendSubInterface(args[1], args)
 						}
 						mirror_args = append(mirror_args, "mirror")
 						mirror_args = append(mirror_args, args...)
@@ -328,7 +373,7 @@ func (cl *SrvClient) Query(args []string) ([]string, error) {
 					}
 					if CONFIGS.Sync {
 						log.Printf("Query Main Need Mirror args:%v Response:%v Error:%v Server:%s Port:%d RemoteAddr:%s\n", args, val, err, v.Info.Host, v.Info.Port, cl.RemoteAddr)
-					}						
+					}
 				}
 			} else if mirror && process {
 
@@ -405,7 +450,7 @@ func (cl *SrvClient) Query(args []string) ([]string, error) {
 						if length%2 == 0 {
 							data := val[1:]
 							for i := 0; i < length; i += 2 {
-								if _,ok := mapList[data[i]]; !ok {
+								if _, ok := mapList[data[i]]; !ok {
 									mapList[data[i]] = data[i+1]
 								}
 							}
@@ -452,23 +497,23 @@ func (cl *SrvClient) Query(args []string) ([]string, error) {
 		case "hgetall", "hscan", "hrscan", "multi_hget", "multi_get", "scan", "rscan":
 			response = append(response, "ok")
 			if len(mapList) > 0 {
-					keylist := sortedKeys(mapList)
-					if args[0] == "rscan" || args[0] == "hrscan" {
-						sort.Sort(sort.Reverse(sort.StringSlice(keylist)))
-					}
-					if CONFIGS.Debug {
-						log.Println("keylist:",keylist, " limit:",limit)
-					}
+				keylist := sortedKeys(mapList)
+				if args[0] == "rscan" || args[0] == "hrscan" {
+					sort.Sort(sort.Reverse(sort.StringSlice(keylist)))
+				}
+				if CONFIGS.Debug {
+					log.Println("keylist:", keylist, " limit:", limit)
+				}
 
-					//if data length > limit ,cut it
-					if limit != -1 && len(keylist) >= limit {
-						keylist = keylist[:limit]
-					}
-					for _,v := range keylist {
-						response = append(response,v)
-						response = append(response,mapList[v])
-					}
-			    }
+				//if data length > limit ,cut it
+				if limit != -1 && len(keylist) >= limit {
+					keylist = keylist[:limit]
+				}
+				for _, v := range keylist {
+					response = append(response, v)
+					response = append(response, mapList[v])
+				}
+			}
 			break
 		case "hsize":
 			response = append(response, "ok")
@@ -489,11 +534,11 @@ func (cl *SrvClient) Query(args []string) ([]string, error) {
 			response = append(response, tmpList...)
 			break
 		}
-		mapList  = nil
+		mapList = nil
 		tmpList = nil
 		return response, nil
 	}
-	mapList  = nil
+	mapList = nil
 	tmpList = nil
 	return response, nil
 
@@ -545,7 +590,7 @@ func (cl *SrvClient) Recv() ([]string, error) {
 }
 
 func (cl *SrvClient) recv() ([]string, error) {
-	tmp := make([]byte,102400)
+	tmp := make([]byte, 102400)
 	for {
 		resp := cl.parse()
 		if resp == nil || len(resp) > 0 {
@@ -580,7 +625,7 @@ func (cl *SrvClient) parse() []string {
 			} else {
 				cl.recvBuf.Next(offset)
 				return resp
-			} 
+			}
 		}
 
 		size, err := strconv.Atoi(string(p))

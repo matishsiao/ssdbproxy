@@ -1,39 +1,39 @@
-package main 
+package main
 
 import (
-	"log"
-	"flag"
-	"os"
-	"time"
-	"io/ioutil"
 	"encoding/json"
-	_"runtime/debug"
+	"flag"
+	"io/ioutil"
+	"log"
+	"os"
 	"runtime"
+	_ "runtime/debug"
 	"runtime/pprof"
-	_"github.com/matishsiao/gossdb/ssdb"
-	_"sync"
+	_ "sync"
+	"time"
+
+	_ "github.com/matishsiao/gossdb/ssdb"
 )
+
 var (
-	version string = "0.0.10"
-	configPath string = "configs.json"
-	CONFIGS Configs
-	modTime time.Time
+	version      string = "0.0.11"
+	configPath   string = "configs.json"
+	CONFIGS      Configs
+	modTime      time.Time
 	GlobalClient ServerClient
-	memprofile string = "mempprof.log"
-	memFile *os.File
-	
+	memprofile   string = "mempprof.log"
+	memFile      *os.File
 )
 
 func main() {
-	log.Println("Version:",version)
-	flag.StringVar(&configPath,"c","configs.json","config file path")
+	log.Println("Version:", version)
+	flag.StringVar(&configPath, "c", "configs.json", "config file path")
 	//flag.StringVar(&memprofile,"mm", "", "write memory profile to this file")
 	flag.Parse()
-	
-	
-	config,err := loadConfigs(configPath)
+
+	config, err := loadConfigs(configPath)
 	if err != nil {
-		log.Println("Load config file error:",err)
+		log.Println("Load config file error:", err)
 		os.Exit(1)
 	}
 	CONFIGS = config
@@ -46,7 +46,7 @@ func main() {
 	//Pprof testing
 	//go memPorfile()
 	GlobalClient.Init()
-	go Listen(CONFIGS.Host,CONFIGS.Port)
+	go Listen(CONFIGS.Host, CONFIGS.Port)
 	go WebServer()
 	timeCounter := 0
 	timePrint := 240
@@ -57,7 +57,7 @@ func main() {
 		configWatcher()
 		//one min ping mirror DBs
 		timeCounter++
-		if timeCounter % timePrint == 0 {
+		if timeCounter%timePrint == 0 {
 			//GlobalClient.DBPool.CheckStatus()
 			//GlobalClient.DBPool.Status()
 			PrintGCSummary()
@@ -70,23 +70,23 @@ func main() {
 func memPorfile() {
 	log.Println("pprof profile started.")
 	StartCPUProfile()
-    time.Sleep(300 * time.Second)
-    DumpHeap()
-    StopCPUProfile()
-    log.Println("write pprof profile finished.")
+	time.Sleep(300 * time.Second)
+	DumpHeap()
+	StopCPUProfile()
+	log.Println("write pprof profile finished.")
 }
 func writeMemProfile() {
-    pprof.WriteHeapProfile(memFile)
+	pprof.WriteHeapProfile(memFile)
 }
 
 func configWatcher() {
 	file, err := os.Open(configPath) // For read access.
 	if err != nil {
-		log.Println("configWatcher error:",err)
+		log.Println("configWatcher error:", err)
 	}
 	info, err := file.Stat()
 	if err != nil {
-		log.Println("configWatcher error:",err)
+		log.Println("configWatcher error:", err)
 	}
 	if modTime.Unix() == -62135596800 {
 		log.Println("configWatcher init mod time")
@@ -96,27 +96,26 @@ func configWatcher() {
 	if info.ModTime() != modTime {
 		log.Printf("Config file changed. Reolad config file.\n")
 		modTime = info.ModTime()
-		CONFIGS,err = loadConfigs(configPath)
-		if err != nil {			
-			log.Printf("configWatcher error:%v\n",err)
+		CONFIGS, err = loadConfigs(configPath)
+		if err != nil {
+			log.Printf("configWatcher error:%v\n", err)
 		}
 	}
 	defer file.Close()
 }
 
-func loadConfigs(fileName string) (Configs,error) {
+func loadConfigs(fileName string) (Configs, error) {
 	file, e := ioutil.ReadFile(fileName)
 	if e != nil {
 		log.Printf("Load config file error: %v\n", e)
 		os.Exit(1)
 	}
-	
+
 	var config Configs
 	err := json.Unmarshal(file, &config)
 	if err != nil {
-		log.Printf("Config load error:%v \n",err)
-		return config,err
+		log.Printf("Config load error:%v \n", err)
+		return config, err
 	}
-	return config,nil
+	return config, nil
 }
-
