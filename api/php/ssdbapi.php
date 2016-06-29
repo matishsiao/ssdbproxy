@@ -3,10 +3,10 @@
 include(dirname(__FILE__) .'/ssdb/SSDB.php');
 set_time_limit(900);
 ini_set('memory_limit', '1024M');
-$host = '104.155.206.199';
+$host = '127.0.0.1';
 //$host = '127.0.0.1';
 $port = 4001;
-$pwd = "sa23891odi1@8hfn!0932aqiomc9AQjiHH";
+$pwd = "password";
 
 
 originTest($host,4004,$pwd);

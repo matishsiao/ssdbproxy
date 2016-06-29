@@ -144,28 +144,40 @@ func (cl *SrvClient) Process(req []string) {
 							return
 						}
 						var resultlist [][]string
+						async := false
+						if len(cmdlist) > 0 && len(cmdlist[0]) >= 1 && cmdlist[0][0] == "async" {
+							async = true
+							cl.Send([]string{"ok", "batchexec use async mode."}, false)
+						}
 						for _, v := range cmdlist {
+							if v[0] == "async" {
+								continue
+							}
 							res, err := cl.Query(v)
+							if !async {
+								if err != nil {
+									resultlist = append(resultlist, []string{"error", err.Error()})
+									continue
+								}
+								if res == nil {
+									resultlist = append(resultlist, []string{"not_found"})
+									continue
+								}
+								resultlist = append(resultlist, res)
+							}
+						}
+						if !async {
+							resultjson, err := json.Marshal(resultlist)
 							if err != nil {
-								resultlist = append(resultlist, []string{"error", err.Error()})
-								continue
+								cl.Send([]string{"fail", "batchexec send json result failed." + err.Error()}, false)
+								return
 							}
-							if res == nil {
-								resultlist = append(resultlist, []string{"not_found"})
-								continue
+							res := []string{"ok", string(resultjson)}
+							if cl.Zip {
+								cl.Send(res, true)
+							} else {
+								cl.Send(res, false)
 							}
-							resultlist = append(resultlist, res)
-						}
-						resultjson, err := json.Marshal(resultlist)
-						if err != nil {
-							cl.Send([]string{"fail", "batchexec send json result failed." + err.Error()}, false)
-							return
-						}
-						res := []string{"ok", string(resultjson)}
-						if cl.Zip {
-							cl.Send(res, true)
-						} else {
-							cl.Send(res, false)
 						}
 					}
 				} else {
