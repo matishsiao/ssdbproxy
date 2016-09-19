@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	_ "io"
+	"io/ioutil"
 	"log"
 	"net"
 	_ "runtime"
@@ -87,8 +88,6 @@ func (cl *SrvClient) HealthCheck() {
 }
 
 func (cl *SrvClient) Read() {
-	timeout := 100
-
 	for cl.Connected {
 		data, err := cl.Recv()
 		if err != nil {
@@ -102,9 +101,7 @@ func (cl *SrvClient) Read() {
 			if len(data) > 0 {
 				cl.Process(data)
 			}
-			timeout = 10
 		}
-		time.Sleep(time.Duration(timeout) * time.Microsecond)
 	}
 }
 
@@ -369,7 +366,10 @@ func (cl *SrvClient) Query(args []string) ([]string, error) {
 						errFlag = true
 						errMsg = err
 					}
-					if !errFlag && val[0] == "ok" {
+					if CONFIGS.Debug {
+						log.Println("args:", args, " main Response:", val, "error:", err)
+					}
+					if !errFlag && len(val) > 0 && val[0] == "ok" {
 						response = val
 						var mirror_args []string
 						if len(args) > 2 {
@@ -602,7 +602,34 @@ func (cl *SrvClient) Recv() ([]string, error) {
 }
 
 func (cl *SrvClient) recv() ([]string, error) {
-	tmp := make([]byte, 102400)
+	//tmp := make([]byte, 102400)
+	var tmp [102400]byte
+	for {
+		resp := cl.parse()
+		if resp == nil || len(resp) > 0 {
+			//log.Println("SSDB Receive:",resp)
+			if len(resp) > 0 && resp[0] == "zip" {
+				//log.Println("SSDB Receive Zip\n", resp)
+				if len(resp[1]) > 1 {
+					zipData, err := base64.StdEncoding.DecodeString(resp[1])
+					if err != nil {
+						return nil, err
+					}
+					resp = cl.UnZip(zipData)
+				} else {
+					return resp, nil
+				}
+
+			}
+			return resp, nil
+		}
+		n, err := cl.Conn.Read(tmp[0:])
+		if err != nil {
+			return nil, err
+		}
+		cl.recvBuf.Write(tmp[0:n])
+	}
+	/*tmp := make([]byte, 102400)
 	for {
 		resp := cl.parse()
 		if resp == nil || len(resp) > 0 {
@@ -613,7 +640,7 @@ func (cl *SrvClient) recv() ([]string, error) {
 			return nil, err
 		}
 		cl.recvBuf.Write(tmp[0:n])
-	}
+	}*/
 }
 
 func (cl *SrvClient) parse() []string {
@@ -655,4 +682,48 @@ func (cl *SrvClient) parse() []string {
 
 	//fmt.Printf("buf.size: %d packet not ready...\n", len(buf))
 	return []string{}
+}
+
+func (cl *SrvClient) UnZip(data []byte) []string {
+	var buf bytes.Buffer
+	buf.Write(data)
+	zipReader, err := gzip.NewReader(&buf)
+	if err != nil {
+		log.Println("[ERROR] New gzip reader:", err)
+	}
+	defer zipReader.Close()
+
+	zipData, err := ioutil.ReadAll(zipReader)
+	if err != nil {
+		fmt.Println("[ERROR] ReadAll:", err)
+		return nil
+	}
+	var resp []string
+
+	if zipData != nil {
+		Idx := 0
+		offset := 0
+		hiIdx := 0
+		for {
+			Idx = bytes.IndexByte(zipData, '\n')
+			if Idx == -1 {
+				break
+			}
+			p := string(zipData[:Idx])
+			//fmt.Println("p:[",p,"]\n")
+			size, err := strconv.Atoi(string(p))
+			if err != nil || size < 0 {
+				zipData = zipData[Idx+1:]
+				continue
+			} else {
+				offset = Idx + 1 + size
+				hiIdx = size + Idx + 1
+				resp = append(resp, string(zipData[Idx+1:hiIdx]))
+				//fmt.Printf("data:[%s] size:%d Idx:%d\n",str,size,Idx+1)
+				zipData = zipData[offset:]
+			}
+
+		}
+	}
+	return resp
 }
