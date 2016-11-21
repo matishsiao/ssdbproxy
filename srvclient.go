@@ -242,6 +242,7 @@ func (cl *SrvClient) CheckDBNodes() {
 				if err != nil {
 					continue
 				}
+				db.Debug(CONFIGS.Debug)
 				cl.DBNodes = append(cl.DBNodes, &DBNode{Client: db, Id: v.Id, Info: v})
 			}
 		}
@@ -305,12 +306,12 @@ func (cl *SrvClient) Query(args []string) ([]string, error) {
 			mirror = true
 		case "mirror":
 			sync = true
-			if CONFIGS.Sync {
+			if CONFIGS.Debug {
 				log.Println("Main Mirror Sync args:", args, cl.RemoteAddr)
 			}
 		case "mirror_del":
 			syncDel = true
-			if CONFIGS.Sync {
+			if CONFIGS.Debug {
 				log.Println("Main Mirror Sync Del args:", args, cl.RemoteAddr)
 			}
 		}
@@ -332,7 +333,7 @@ func (cl *SrvClient) Query(args []string) ([]string, error) {
 						}
 						if !errFlag && val[0] == "ok" {
 							response = val
-							if CONFIGS.Sync {
+							if CONFIGS.Debug {
 								log.Printf("Query Mirror Sync args:%v Response:%v Error:%v Server:%s Port:%d RemoteAddr:%s\n", args, val, err, v.Info.Host, v.Info.Port, cl.RemoteAddr)
 							}
 							break
@@ -352,7 +353,7 @@ func (cl *SrvClient) Query(args []string) ([]string, error) {
 
 					if !errFlag && val[0] == "ok" {
 						response = val
-						if CONFIGS.Sync {
+						if CONFIGS.Debug {
 							log.Printf("Query Mirror SyncDel args:%v Response:%v Error:%v Server:%s Port:%d RemoteAddr:%s\n", args, val, err, v.Info.Host, v.Info.Port, cl.RemoteAddr)
 						}
 					} else if len(response) == 0 {
@@ -383,7 +384,7 @@ func (cl *SrvClient) Query(args []string) ([]string, error) {
 						response = val
 						break
 					}
-					if CONFIGS.Sync {
+					if CONFIGS.Debug {
 						log.Printf("Query Main Need Mirror args:%v Response:%v Error:%v Server:%s Port:%d RemoteAddr:%s\n", args, val, err, v.Info.Host, v.Info.Port, cl.RemoteAddr)
 					}
 				}
