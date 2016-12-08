@@ -8,6 +8,7 @@ import (
 	"runtime/debug"
 	"runtime/pprof"
 	"strconv"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -16,9 +17,33 @@ import (
 var heapProfileCounter int32
 var startTime = time.Now()
 var pid int
+var mutex = &sync.Mutex{}
+var watchCPU bool
 
 func init() {
 	pid = os.Getpid()
+}
+
+func WatchCPU() {
+	mutex.Lock()
+	log.Println("WatchCPU:", watchCPU)
+	if !watchCPU {
+		go Porfiling()
+		watchCPU = true
+	}
+	mutex.Unlock()
+}
+
+func Porfiling() {
+	log.Println("pprof profile started.")
+	StartCPUProfile()
+	time.Sleep(300 * time.Second)
+	DumpHeap()
+	StopCPUProfile()
+	mutex.Lock()
+	watchCPU = false
+	mutex.Unlock()
+	log.Println("write pprof profile finished.")
 }
 
 func StartCPUProfile() {
@@ -144,9 +169,6 @@ func PrintGCSummary() {
 
 	printGC(memStats, gcstats)
 }
-
-
-
 
 func printGC(memStats *runtime.MemStats, gcstats *debug.GCStats) {
 

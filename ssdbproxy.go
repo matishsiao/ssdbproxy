@@ -13,24 +13,27 @@ import (
 	"time"
 
 	_ "github.com/matishsiao/gossdb/ssdb"
+	"github.com/shirou/gopsutil/process"
 )
 
 var (
-	version      string = "0.0.15"
+	version      string = "0.0.17"
 	configPath   string = "configs.json"
 	CONFIGS      Configs
 	modTime      time.Time
 	GlobalClient ServerClient
 	memprofile   string = "mempprof.log"
 	memFile      *os.File
+	full         bool
+	calcCPU      bool
 )
 
 func main() {
 	log.Println("Version:", version)
 	flag.StringVar(&configPath, "c", "configs.json", "config file path")
+	flag.BoolVar(&full, "f", false, "using full cpu")
 	//flag.StringVar(&memprofile,"mm", "", "write memory profile to this file")
 	flag.Parse()
-
 	config, err := loadConfigs(configPath)
 	if err != nil {
 		log.Println("Load config file error:", err)
@@ -38,43 +41,45 @@ func main() {
 	}
 	CONFIGS = config
 	SetUlimit(1002000)
-	useCPU := runtime.NumCPU() - 1
-	if useCPU <= 0 {
-		useCPU = 1
+	useCPU := runtime.NumCPU()
+	if !full {
+		useCPU -= 1
+		if useCPU <= 0 {
+			useCPU = 1
+		}
 	}
 	runtime.GOMAXPROCS(useCPU)
-	//Pprof testing
-	//go memPorfile()
+	go getCPU()
 	GlobalClient.Init()
 	go Listen(CONFIGS.Host, CONFIGS.Port)
 	go WebServer()
-	timeCounter := 0
-	timePrint := 240
-	if CONFIGS.Debug {
-		timePrint = 20
+	go checkConfig()
+	for {
+		PrintGCSummary()
+		time.Sleep(60 * time.Second)
 	}
+}
+
+func getCPU() {
+	stats, _ := process.NewProcess(int32(os.Getpid()))
+	for {
+		cpu, _ := stats.Percent(1 * time.Second)
+		if cpu > 30 {
+			log.Printf("CPU:%v\n", cpu)
+			go WatchCPU()
+		}
+
+		time.Sleep(1 * time.Second)
+	}
+}
+
+func checkConfig() {
 	for {
 		configWatcher()
-		//one min ping mirror DBs
-		timeCounter++
-		if timeCounter%timePrint == 0 {
-			//GlobalClient.DBPool.CheckStatus()
-			//GlobalClient.DBPool.Status()
-			PrintGCSummary()
-			timeCounter = 0
-		}
 		time.Sleep(250 * time.Millisecond)
 	}
 }
 
-func memPorfile() {
-	log.Println("pprof profile started.")
-	StartCPUProfile()
-	time.Sleep(300 * time.Second)
-	DumpHeap()
-	StopCPUProfile()
-	log.Println("write pprof profile finished.")
-}
 func writeMemProfile() {
 	pprof.WriteHeapProfile(memFile)
 }

@@ -59,9 +59,6 @@ func (cl *SrvClient) Close() {
 	for _, v := range cl.DBNodes {
 		v.Client.Close()
 	}
-	if CONFIGS.Debug {
-		log.Println("Close Service Connection by Timeout:", cl.Conn.RemoteAddr(), "Close DB Connections:", len(cl.DBNodes))
-	}
 	//cl.MirrorClient.Close()
 	cl.DBNodes = nil
 	cl.mu.Unlock()
@@ -77,12 +74,11 @@ func (cl *SrvClient) HealthCheck() {
 	for cl.Connected {
 		if time.Now().Unix()-cl.RequestTime >= CONFIGS.Timeout {
 			log.Println("HealthCheck Service Connection by Timeout:", cl.Conn.RemoteAddr())
-			cl.Close()
 			break
 		}
 		time.Sleep(time.Duration(timeout) * time.Second)
 	}
-
+	cl.Close()
 	//receyle client
 	cl = nil
 }
@@ -94,7 +90,6 @@ func (cl *SrvClient) Read() {
 			if CONFIGS.Debug {
 				log.Printf("Srv Client Receive Error:%v RemoteAddr:%s\n", err, cl.RemoteAddr)
 			}
-			cl.Close()
 			break
 		} else {
 			cl.RequestTime = time.Now().Unix()
@@ -103,10 +98,10 @@ func (cl *SrvClient) Read() {
 			}
 		}
 	}
+	cl.Close()
 }
 
 func (cl *SrvClient) Process(req []string) {
-
 	if len(req) == 0 {
 		//ok, not_found, error, fail, client_error
 		cl.Send([]string{"error", "request format incorrect."}, false)
@@ -146,12 +141,30 @@ func (cl *SrvClient) Process(req []string) {
 							async = true
 							cl.Send([]string{"ok", "batchexec use async mode."}, false)
 						}
-						for _, v := range cmdlist {
-							if v[0] == "async" {
-								continue
+						if async {
+							batchConn := cl.CreateBatchConnection()
+							if batchConn != nil {
+								cmdlist = cmdlist[1:]
+								var batchList [][]interface{}
+								for _, v := range cmdlist {
+									var newInt []interface{}
+									for _, item := range v {
+										newInt = append(newInt, item)
+									}
+									batchList = append(batchList, newInt)
+								}
+								err := batchConn.BatchSend(batchList)
+								if err != nil {
+									log.Printf("batchexec async error:%v\n", err)
+								}
+								batchConn.Close()
 							}
-							res, err := cl.Query(v)
-							if !async {
+						} else {
+							for _, v := range cmdlist {
+								if v[0] == "async" {
+									continue
+								}
+								res, err := cl.Query(v)
 								if err != nil {
 									resultlist = append(resultlist, []string{"error", err.Error()})
 									continue
@@ -162,8 +175,6 @@ func (cl *SrvClient) Process(req []string) {
 								}
 								resultlist = append(resultlist, res)
 							}
-						}
-						if !async {
 							resultjson, err := json.Marshal(resultlist)
 							if err != nil {
 								cl.Send([]string{"fail", "batchexec send json result failed." + err.Error()}, false)
@@ -175,7 +186,9 @@ func (cl *SrvClient) Process(req []string) {
 							} else {
 								cl.Send(res, false)
 							}
+
 						}
+
 					}
 				} else {
 					cl.Send([]string{"error", "Proxy service initing."}, false)
@@ -231,19 +244,41 @@ func (cl *SrvClient) Process(req []string) {
 		}
 	}
 }
+
+func (cl *SrvClient) CreateBatchConnection() *ssdb.Client {
+	for _, v := range CONFIGS.Nodelist {
+		if v.Mode == "main" {
+			db, err := ssdb.Connect(v.Host, v.Port, v.Password)
+			if CONFIGS.Debug {
+				log.Println("Connect to ", v.Host, v.Port)
+			}
+			if err != nil {
+				continue
+			}
+			db.Debug(CONFIGS.Debug)
+			return db
+		}
+	}
+	return nil
+}
+
+func (cl *SrvClient) CreateConnection(v DBNodeInfo) {
+	db, err := ssdb.Connect(v.Host, v.Port, v.Password)
+	if CONFIGS.Debug {
+		log.Println("Connect to ", v.Host, v.Port)
+	}
+	if err != nil {
+		log.Println("Connect to Fail:", v.Host, v.Port, err)
+	}
+	db.Debug(CONFIGS.Debug)
+	cl.DBNodes = append(cl.DBNodes, &DBNode{Client: db, Id: v.Id, Info: v})
+}
+
 func (cl *SrvClient) CheckDBNodes() {
 	if len(cl.DBNodes) == 0 {
 		for _, v := range CONFIGS.Nodelist {
 			if v.Mode == "main" || v.Mode == "queries" {
-				db, err := ssdb.Connect(v.Host, v.Port, v.Password)
-				if CONFIGS.Debug {
-					log.Println("Connect to ", v.Host, v.Port)
-				}
-				if err != nil {
-					continue
-				}
-				db.Debug(CONFIGS.Debug)
-				cl.DBNodes = append(cl.DBNodes, &DBNode{Client: db, Id: v.Id, Info: v})
+				cl.CreateConnection(v)
 			}
 		}
 	} else {
@@ -257,14 +292,7 @@ func (cl *SrvClient) CheckDBNodes() {
 			}
 			if add {
 				if cv.Mode == "main" || cv.Mode == "queries" {
-					db, err := ssdb.Connect(cv.Host, cv.Port, cv.Password)
-					if CONFIGS.Debug {
-						log.Println("Srv Client Connect to ", cv.Host, cv.Port)
-					}
-					if err != nil {
-						continue
-					}
-					cl.DBNodes = append(cl.DBNodes, &DBNode{Client: db, Id: cv.Id, Info: cv})
+					cl.CreateConnection(cv)
 				}
 			}
 		}
@@ -455,7 +483,7 @@ func (cl *SrvClient) Query(args []string) ([]string, error) {
 						response = val
 					case "exists", "hexists":
 						response = val
-						if val[1] == "1" {
+						if len(val) == 2 && val[1] == "1" {
 							quit = true
 						}
 					default:
