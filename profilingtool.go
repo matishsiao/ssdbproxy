@@ -15,6 +15,7 @@ import (
 )
 
 var heapProfileCounter int32
+var cpuProfileCounter int32
 var startTime = time.Now()
 var pid int
 var mutex = &sync.Mutex{}
@@ -38,7 +39,7 @@ func Porfiling() {
 	log.Println("pprof profile started.")
 	StartCPUProfile()
 	time.Sleep(300 * time.Second)
-	DumpHeap()
+	//DumpHeap()
 	StopCPUProfile()
 	mutex.Lock()
 	watchCPU = false
@@ -47,10 +48,11 @@ func Porfiling() {
 }
 
 func StartCPUProfile() {
-	f, err := os.Create("cpu-" + strconv.Itoa(pid) + ".pprof")
+	f, err := os.Create("cpu-" + strconv.Itoa(pid) + fmt.Sprintf("%d", cpuProfileCounter) + ".pprof")
 	if err != nil {
 		log.Fatal(err)
 	}
+	cpuProfileCounter++
 	pprof.StartCPUProfile(f)
 }
 

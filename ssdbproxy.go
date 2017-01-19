@@ -26,6 +26,7 @@ var (
 	memFile      *os.File
 	full         bool
 	calcCPU      bool
+	useCPU       int
 )
 
 func main() {
@@ -41,7 +42,7 @@ func main() {
 	}
 	CONFIGS = config
 	SetUlimit(1002000)
-	useCPU := runtime.NumCPU()
+	useCPU = runtime.NumCPU()
 	if !full {
 		useCPU -= 1
 		if useCPU <= 0 {
@@ -64,8 +65,8 @@ func getCPU() {
 	stats, _ := process.NewProcess(int32(os.Getpid()))
 	for {
 		cpu, _ := stats.Percent(1 * time.Second)
-		if cpu > 30 {
-			log.Printf("CPU:%v\n", cpu)
+		if int(cpu) > useCPU*80 {
+			log.Printf("CPU using too high:%v\n", cpu)
 			go WatchCPU()
 		}
 

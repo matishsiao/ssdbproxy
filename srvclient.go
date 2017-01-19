@@ -42,12 +42,9 @@ func (cl *SrvClient) Init(conn *net.TCPConn) {
 		cl.Auth = true
 	}
 	cl.RemoteAddr = strings.Split(cl.Conn.RemoteAddr().String(), ":")[0]
-	/*cl.MirrorClient = ServerClient{Mutex:&sync.Mutex{}}
-	cl.MirrorClient.ArgsChannel = make(chan []string)*/
 	cl.CheckDBNodes()
 	go cl.HealthCheck()
 	cl.Read()
-	//PrintGCSummary()
 }
 
 //Close Client connection
@@ -59,13 +56,9 @@ func (cl *SrvClient) Close() {
 	for _, v := range cl.DBNodes {
 		v.Client.Close()
 	}
-	//cl.MirrorClient.Close()
 	cl.DBNodes = nil
 	cl.mu.Unlock()
-	ProxyConn--
-	if ProxyConn <= 0 {
-		ProxyConn = 0
-	}
+
 }
 
 func (cl *SrvClient) HealthCheck() {
@@ -145,6 +138,7 @@ func (cl *SrvClient) Process(req []string) {
 							batchConn := cl.CreateBatchConnection()
 							if batchConn != nil {
 								cmdlist = cmdlist[1:]
+								//log.Println("async batch sync:", len(cmdlist))
 								var batchList [][]interface{}
 								for _, v := range cmdlist {
 									var newInt []interface{}
@@ -157,6 +151,7 @@ func (cl *SrvClient) Process(req []string) {
 								if err != nil {
 									log.Printf("batchexec async error:%v\n", err)
 								}
+								//log.Println("async batch sync done")
 								batchConn.Close()
 							}
 						} else {
