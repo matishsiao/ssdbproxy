@@ -12,6 +12,7 @@ import (
 type ServerClient struct {
 	Mutex     *sync.Mutex
 	DBNodes   []*DBNode
+	DBNodeLen int
 	DBPool    *ServerConnectionPool
 	Running   bool
 	Process   bool
@@ -30,6 +31,13 @@ func (cl *ServerClient) Init() {
 		go cl.Watcher(queue.Args)
 	}
 	go cl.DBPool.Init()
+	cl.DBNodeLen = 0
+	for _, v := range CONFIGS.Nodelist {
+		if v.Mode == "mirror" || v.Mode == "sync" {
+			cl.DBNodeLen++
+		}
+	}
+
 }
 func (cl *ServerClient) Watcher(queue chan []string) {
 	for args := range queue {
@@ -47,7 +55,10 @@ func (cl *ServerClient) Append(args []string) {
 	if CONFIGS.Debug {
 		log.Println("Server Client Append:", args)
 	}
-	//cl.MirrorQuery(args)
+	//no need to sync
+	if cl.DBNodeLen == 0 {
+		return
+	}
 	cl.Mutex.Lock()
 	cl.QueueIdx++
 	if cl.QueueIdx >= len(cl.ArgsQueue) {

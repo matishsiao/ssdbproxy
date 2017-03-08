@@ -27,6 +27,7 @@ type SrvClient struct {
 	RemoteAddr  string
 	RequestTime int64
 	recvBuf     bytes.Buffer
+	tmpBuf      []byte
 	DBNodes     []*DBNode
 	Auth        bool
 	Zip         bool
@@ -63,13 +64,12 @@ func (cl *SrvClient) Close() {
 
 func (cl *SrvClient) HealthCheck() {
 	cl.RequestTime = time.Now().Unix()
-	timeout := 1
 	for cl.Connected {
 		if time.Now().Unix()-cl.RequestTime >= CONFIGS.Timeout {
 			log.Println("HealthCheck Service Connection by Timeout:", cl.Conn.RemoteAddr())
 			break
 		}
-		time.Sleep(time.Duration(timeout) * time.Second)
+		time.Sleep(1 * time.Second)
 	}
 	cl.Close()
 	//receyle client
@@ -85,8 +85,8 @@ func (cl *SrvClient) Read() {
 			}
 			break
 		} else {
-			cl.RequestTime = time.Now().Unix()
 			if len(data) > 0 {
+				cl.RequestTime = time.Now().Unix()
 				cl.Process(data)
 			}
 		}
@@ -669,20 +669,24 @@ func (cl *SrvClient) recv() ([]string, error) {
 
 func (cl *SrvClient) parse() []string {
 	resp := []string{}
-	buf := cl.recvBuf.Bytes()
-	var idx, offset int
+	cl.tmpBuf = cl.recvBuf.Bytes()
+	var idx, offset, plen int
 	idx = 0
 	offset = 0
 
 	for {
-		idx = bytes.IndexByte(buf[offset:], '\n')
+		if len(cl.tmpBuf) < offset {
+			break
+		}
+		idx = bytes.IndexByte(cl.tmpBuf[offset:], '\n')
 		if idx == -1 {
 			break
 		}
-		p := buf[offset : offset+idx]
+		p := cl.tmpBuf[offset : offset+idx]
 		offset += idx + 1
 		//fmt.Printf("> [%s]\n", p);
-		if len(p) == 0 || (len(p) == 1 && p[0] == '\r') {
+		plen = len(p)
+		if plen == 0 || (plen == 1 && p[0] == '\r') {
 			if len(resp) == 0 {
 				continue
 			} else {
@@ -699,7 +703,7 @@ func (cl *SrvClient) parse() []string {
 			break
 		}
 
-		v := buf[offset : offset+size]
+		v := cl.tmpBuf[offset : offset+size]
 		resp = append(resp, string(v))
 		offset += size + 1
 	}
