@@ -1,18 +1,20 @@
 package main
+
 import (
-	"net/http"
-	"github.com/gorilla/mux"
-	"fmt"	
-	"log"
+	_ "crypto/tls"
 	"encoding/json"
-	_"crypto/tls"
+	"fmt"
+	"log"
+	"net/http"
+
+	"github.com/gorilla/mux"
 )
 
 func WebServer() {
 	r := mux.NewRouter()
 	r.HandleFunc("/", HomeHandler)
 	r.HandleFunc("/status", StatusHandler)
-	http.Handle("/", r)	
+	http.Handle("/", r)
 	WsServer()
 	log.Println("Web Service starting.")
 	http.ListenAndServe(CONFIGS.Http, nil)
@@ -24,10 +26,10 @@ func WebServer() {
 	}*/
 }
 
-func jsonParser(data interface{},w http.ResponseWriter) {
+func jsonParser(data interface{}, w http.ResponseWriter) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	if data != nil {
-		json, err := json.Marshal(data)	
+		json, err := json.Marshal(data)
 		if err != nil {
 			w.WriteHeader(500)
 			log.Println("Error generating json", err)
@@ -48,7 +50,6 @@ func HomeHandler(w http.ResponseWriter, r *http.Request) {
 
 func StatusHandler(w http.ResponseWriter, r *http.Request) {
 	data := make(map[string]string)
-	data["connection"] = fmt.Sprintf("%d",ProxyConn)
-	jsonParser(data,w)
+	data["connection"] = fmt.Sprintf("%d", status.Get())
+	jsonParser(data, w)
 }
-

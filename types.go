@@ -2,39 +2,40 @@ package main
 
 import (
 	"sort"
+	"sync"
+
 	"github.com/matishsiao/gossdb/ssdb"
 )
 
 type Configs struct {
-	Debug		bool `json:"debug"`
-	Host     string `json:"host"`
-	Http	string	`json:"http"`
-	Timeout	int64	`json:"timeout"`
-	Sync	bool	`json:"sync"`
-	Nodelist []DBNodeInfo `json:"nodelist"`
-	Password string `json:"password"`
-	Port     int    `json:"port"`
-	ConnectionLimit int `json:"limit"`
+	Debug           bool         `json:"debug"`
+	Host            string       `json:"host"`
+	Http            string       `json:"http"`
+	Timeout         int64        `json:"timeout"`
+	Sync            bool         `json:"sync"`
+	Nodelist        []DBNodeInfo `json:"nodelist"`
+	Password        string       `json:"password"`
+	Port            int          `json:"port"`
+	ConnectionLimit int          `json:"limit"`
 }
 
 type DBNodeInfo struct {
-	Host	string `json:"host"`
-	Id		string `json:"id"`
+	Host     string `json:"host"`
+	Id       string `json:"id"`
 	Password string `json:"password"`
 	Port     int    `json:"port"`
 	Weight   int    `json:"weight"`
-	Mode	string	`json:"mode"`
+	Mode     string `json:"mode"`
 }
 
 type DBNode struct {
 	Client *ssdb.Client
-	Info DBNodeInfo
-	Id string
+	Info   DBNodeInfo
+	Id     string
 }
 
-
 type SrvData struct {
-	Key string
+	Key   string
 	Value string
 }
 
@@ -75,7 +76,7 @@ func (sm sortedSrvArray) Len() int {
 }
 
 func (sm sortedSrvArray) Less(i, j int) bool {
-	return sm[i].Key > sm[j].Key 
+	return sm[i].Key > sm[j].Key
 }
 
 func (sm sortedSrvArray) Swap(i, j int) {
@@ -95,7 +96,7 @@ func (sm sortedRSrvArray) Len() int {
 }
 
 func (sm sortedRSrvArray) Less(i, j int) bool {
-	return sm[i].Key < sm[j].Key 
+	return sm[i].Key < sm[j].Key
 }
 
 func (sm sortedRSrvArray) Swap(i, j int) {
@@ -106,4 +107,28 @@ func sortedSrvRKeys(m []SrvData) []SrvData {
 	var sm sortedRSrvArray = m
 	sort.Sort(sm)
 	return sm
+}
+
+type ConnectionStatus struct {
+	Mutex     *sync.Mutex
+	ProxyConn int64
+}
+
+func (c *ConnectionStatus) Add() {
+	c.Mutex.Lock()
+	c.ProxyConn++
+	c.Mutex.Unlock()
+}
+
+func (c *ConnectionStatus) Get() int64 {
+	return c.ProxyConn
+}
+
+func (c *ConnectionStatus) Remove() {
+	c.Mutex.Lock()
+	c.ProxyConn--
+	if c.ProxyConn < 0 {
+		c.ProxyConn = 0
+	}
+	c.Mutex.Unlock()
 }

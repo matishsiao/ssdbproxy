@@ -54,6 +54,7 @@ func (cl *SrvClient) Close() {
 	cl.Conn.Close()
 	cl.Connected = false
 	cl.Auth = false
+	status.Remove()
 	for _, v := range cl.DBNodes {
 		v.Client.Close()
 	}
