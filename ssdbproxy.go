@@ -13,7 +13,7 @@ import (
 	"time"
 
 	_ "github.com/matishsiao/gossdb/ssdb"
-	"github.com/shirou/gopsutil/process"
+	_ "github.com/shirou/gopsutil/process"
 )
 
 var (
@@ -62,7 +62,7 @@ func main() {
 }
 
 func getCPU() {
-	stats, _ := process.NewProcess(int32(os.Getpid()))
+	/*stats, _ := process.NewProcess(int32(os.Getpid()))
 	for {
 		cpu, _ := stats.Percent(1 * time.Second)
 		if int(cpu) > useCPU*80 {
@@ -71,7 +71,7 @@ func getCPU() {
 		}
 
 		time.Sleep(1 * time.Second)
-	}
+	}*/
 }
 
 func checkConfig() {

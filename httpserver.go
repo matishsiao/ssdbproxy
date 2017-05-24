@@ -17,13 +17,13 @@ func WebServer() {
 	http.Handle("/", r)
 	WsServer()
 	log.Println("Web Service starting.")
-	http.ListenAndServe(CONFIGS.Http, nil)
+	//http.ListenAndServe(CONFIGS.Http, nil)
 
-	/*err = http.ListenAndServeTLS(":443","ssl/nxg.crt","ssl/nxg.key",nil)
+	err := http.ListenAndServeTLS(CONFIGS.Http, "ssl/proxy.crt", "ssl/proxy.key", nil)
 	if err != nil {
-		fmt.Println("ListenAndServeTLS:",err)
+		fmt.Println("ListenAndServeTLS:", err)
 		log.Fatal("ListenAndServeTLS:", err)
-	}*/
+	}
 }
 
 func jsonParser(data interface{}, w http.ResponseWriter) {
